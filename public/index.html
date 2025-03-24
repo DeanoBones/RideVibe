@@ -200,12 +200,16 @@
         // Buttons
         const startButton = document.getElementById('startButton');
         const colorButton = document.getElementById('colorButton');
-        startButton.addEventListener('click', () => {
+        startButton.addEventListener('click', startGame);
+
+        function startGame() {
             gameStarted = true;
+            gameOver = false;  // Reset game over flag
+            trailSegments = []; // Clear old trail segments
             startButton.style.display = 'none';
             colorButton.style.display = 'none';
-            animate();
-        });
+            animate();  // Start the animation loop
+        }
 
         function updateColorButton() {
             const currentColor = colors[currentColorIndex];
@@ -238,7 +242,7 @@
                 return;
             }
 
-            requestAnimationFrame(animate);
+            requestAnimationFrame(animate);  // Keep the animation loop going
 
             if (bikeModel && !gameOver) {
                 bikeModel.position.z += speed * Math.cos(bikeModel.rotation.y);
@@ -267,11 +271,13 @@
                 if (checkCollision(bikeModel.position)) {
                     gameOver = true;
                     console.log("Game Over! Crashed into a trail.");
-                    alert("Game Over! Refresh to restart.");
+                    alert("Game Over! Starting a new game...");
+                    startGame();  // Automatically start a new game
                 } else if (checkBoundaries(bikeModel.position)) {
                     gameOver = true;
                     console.log("Game Over! Out of bounds.");
-                    alert("Game Over! Refresh to restart.");
+                    alert("Game Over! Starting a new game...");
+                    startGame();  // Automatically start a new game
                 }
 
                 // Send update to server
@@ -290,9 +296,8 @@
                 camera.lookAt(bikeModel.position);
             }
 
-            renderer.render(scene, camera);
+            renderer.render(scene, camera);  // Render the scene
         }
-        animate();
     </script>
 </body>
 </html>
