@@ -59,12 +59,12 @@
             scene.add(bikeModel);
             bikeModel.scale.set(2, 2, 2);
             bikeModel.position.set(0, 0, 0);
-            bikeModel.rotation.y = 0;
+            bikeModel.rotation.y = Math.PI; // Rotate 180° to face positive Z
         });
 
         // Trail setup (spline-based)
         const trailPoints = [];
-        const maxTrailPoints = 20;
+        const maxTrailPoints = 50; // Increased for longer trail
         let trailCurve, trailMesh;
         const trailMaterial = new THREE.MeshPhongMaterial({ 
             color: 0x00ffff, 
@@ -137,6 +137,7 @@
             loader.load('./models/bike/scene.gltf', (gltf) => {
                 const otherBike = gltf.scene;
                 otherBike.scale.set(2, 2, 2);
+                otherBike.rotation.y = Math.PI; // Match player bike orientation
                 scene.add(otherBike);
                 const otherTrailCurve = new THREE.CatmullRomCurve3([]);
                 const otherTrailGeometry = new THREE.TubeGeometry(otherTrailCurve, 64, 0.15, 8, false);
@@ -193,8 +194,12 @@
         // Collision check
         function checkCollision(bikePos) {
             const bikeRadius = 0.1;
-            for (let points of [trailPoints, ...Object.values(otherPlayers).map(p => p.trailPoints)]) {
-                for (let point of points) {
+            const safeZone = 2;
+            for (let [index, points] of [trailPoints, ...Object.values(otherPlayers).map(p => p.trailPoints)].entries()) {
+                const isOwnTrail = index === 0;
+                for (let i = 0; i < points.length; i++) {
+                    if (isOwnTrail && i < safeZone) continue;
+                    const point = points[i];
                     const dx = bikePos.x - point.x;
                     const dz = bikePos.z - point.z;
                     const distance = Math.sqrt(dx * dx + dz * dz);
@@ -260,15 +265,15 @@
                 if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed;
                 if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed;
 
-                // Add spline point with offset behind bike
+                // Add spline point (offset forward if model faces -Z)
                 const offset = new THREE.Vector3(
-                    -speed * Math.sin(bikeModel.rotation.y), // Negative to go opposite direction
+                    speed * Math.sin(bikeModel.rotation.y), // Positive to match -Z forward
                     0,
-                    -speed * Math.cos(bikeModel.rotation.y)
-                ).multiplyScalar(50); // Match cube offset
-                const newPoint = bikeModel.position.clone().sub(offset);
-                newPoint.y = 0.5; // Match trail height
-                if (trailPoints.length === 0 || bikeModel.position.distanceTo(trailPoints[trailPoints.length - 1]) > 0.5) {
+                    speed * Math.cos(bikeModel.rotation.y)
+                ).multiplyScalar(50); // Back to 5 for balance
+                const newPoint = bikeModel.position.clone().sub(offset); // Still subtract to place behind
+                newPoint.y = 0.5;
+                if (trailPoints.length === 0 || bikeModel.position.distanceTo(trailPoints[trailPoints.length - 1]) > 0.3) { // Reduced to 0.3 for denser points
                     trailPoints.push(newPoint);
                     if (trailPoints.length > maxTrailPoints) trailPoints.shift();
 
