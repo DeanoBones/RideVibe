@@ -95,9 +95,7 @@
                 case 'init':
                     myId = data.id;
                     for (let id in data.players) {
-                        if (id != myId && data.players[id].position.x !== 0) {
-                            addOtherPlayer(data.players[id]);
-                        }
+                        if (id != myId) addOtherPlayer(data.players[id]);
                     }
                     break;
                 case 'newPlayer':
@@ -113,13 +111,11 @@
         };
 
         function addOtherPlayer(player) {
-            if (!otherPlayers[player.id] && player.position.x !== 0) {
+            if (!otherPlayers[player.id]) {
                 loader.load('./models/bike/scene.gltf', (gltf) => {
                     const otherBike = gltf.scene;
                     otherBike.scale.set(2, 2, 2);
-                    otherBike.traverse(child => {
-                        if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
-                    });
+                    otherBike.visible = false; // Hide until started
                     scene.add(otherBike);
                     otherPlayers[player.id] = {
                         model: otherBike,
@@ -128,9 +124,10 @@
                             color: player.color || 0x00ffff, 
                             emissive: player.color || 0x00ffff, 
                             emissiveIntensity: 0.8 
-                        })
+                        }),
+                        hasStarted: false
                     };
-                    updateOtherPlayer(player);
+                    updateOtherPlayer(player); // Apply initial data
                 });
             }
         }
@@ -146,7 +143,12 @@
                     if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
                 });
 
-                if (player.newTrail) {
+                if (player.position.x !== 0 || player.position.z !== 0) { // Started if not at (0,0,0)
+                    other.hasStarted = true;
+                    other.model.visible = true;
+                }
+
+                if (player.newTrail && other.hasStarted) {
                     const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
                     const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
                     trailSegment.position.set(player.newTrail.x, player.newTrail.y, player.newTrail.z);
