@@ -251,7 +251,7 @@
                 if (timestamp - lastSpawnTime >= spawnInterval) {
                     const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
                     const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                    const offset = new THREE.Vector3(speed * Math.sin(bikeModel.rotation.y), 0, speed * Math.cos(bikeModel.rotation.y)).multiplyScalar(5 * deltaTime);
+                    const offset = new THREE.Vector3(speed * Math.sin(bikeModel.rotation.y), 0, speed * Math.cos(bikeModel.rotation.y)).multiplyScalar(50 * deltaTime);
                     trailSegment.position.copy(bikeModel.position).sub(offset);
                     trailSegment.position.y = -0.5 + trailHeight / 2;
                     scene.add(trailSegment);
