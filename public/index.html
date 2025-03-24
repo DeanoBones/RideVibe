@@ -59,9 +59,9 @@
         });
 
         let trailMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
-        const trailHeight = 2; // Height (y)
-        const trailWidth = 2; // Width (x) - wider for wall effect
-        const trailDepth = 0.15; // Depth (z) - thin along bike's path
+        const trailHeight = 2;
+        const trailWidth = 2; // Wide across path
+        const trailDepth = 0.15; // Thin along path
         let trailSegments = [];
         let lastSpawnTime = 0;
         const spawnInterval = 100; // 0.1 seconds in ms
@@ -145,9 +145,10 @@
                 other.trailMaterial.emissive.setHex(player.color);
 
                 if (player.newTrail) {
-                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth); // Wider wall
+                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
                     const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
                     trailSegment.position.set(player.newTrail.x, player.newTrail.y, player.newTrail.z);
+                    trailSegment.rotation.y = player.rotation; // Align with bike
                     scene.add(trailSegment);
                     other.trailSegments.push({ mesh: trailSegment, spawnTime: player.spawnTime });
                 }
@@ -184,7 +185,7 @@
                     const dx = bikePos.x - trailPos.x;
                     const dz = bikePos.z - trailPos.z;
                     const distance = Math.sqrt(dx * dx + dz * dz);
-                    if (distance < bikeRadius + trailWidth / 2) return true; // Adjust for wider wall
+                    if (distance < bikeRadius + trailWidth / 2) return true;
                 }
             }
             return false;
@@ -247,7 +248,7 @@
                 if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed * deltaTime;
 
                 if (timestamp - lastSpawnTime >= spawnInterval) {
-                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth); // Wider wall
+                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
                     const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
                     const offset = new THREE.Vector3(
                         speed * Math.sin(bikeModel.rotation.y),
@@ -256,6 +257,7 @@
                     ).multiplyScalar(2);
                     trailSegment.position.copy(bikeModel.position).sub(offset);
                     trailSegment.position.y = -0.5 + trailHeight / 2;
+                    trailSegment.rotation.y = bikeModel.rotation.y; // Align with bike
                     scene.add(trailSegment);
                     trailSegments.push({ mesh: trailSegment, spawnTime: timestamp });
 
