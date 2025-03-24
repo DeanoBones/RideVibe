@@ -1,0 +1,298 @@
+<html>
+<head>
+    <title>RideVibe - Tron Bike Game</title>
+    <style>
+        body { margin: 0; }
+        canvas { width: 100%; height: 100vh; }
+        #startButton, #colorButton {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #colorButton { 
+            top: 60px; 
+            transition: background-color 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <button id="startButton">Start</button>
+    <button id="colorButton">Change Color</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+        // Grid floor
+        const gridSize = 100;
+        const divisions = 50;
+        const gridHelper = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
+        gridHelper.position.y = -1;
+        scene.add(gridHelper);
+        const planeGeometry = new THREE.PlaneGeometry(gridSize, gridSize);
+        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x001111, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = Math.PI / 2;
+        plane.position.y = -1.1;
+        scene.add(plane);
+
+        // Bike setup
+        const loader = new THREE.GLTFLoader();
+        let bikeModel;
+        loader.load('./models/bike/scene.gltf', (gltf) => {
+            bikeModel = gltf.scene;
+            scene.add(bikeModel);
+            bikeModel.scale.set(2, 2, 2);
+            bikeModel.position.set(0, 0, 0);
+            bikeModel.rotation.y = 0;
+        });
+
+        // Trail setup
+        let trailMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
+        const trailHeight = 2;
+        const trailWidth = 0.15;
+        let trailSegments = [];
+        let lastTrailPosition = null;
+        const maxTrailSegments = 200;
+
+        // Colors
+        const colors = [
+            { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
+            { hex: 0xff0000, name: "Red", css: "#ff0000" },
+            { hex: 0x00ff00, name: "Green", css: "#00ff00" },
+            { hex: 0xffff00, name: "Yellow", css: "#ffff00" },
+            { hex: 0xff00ff, name: "Magenta", css: "#ff00ff" },
+            { hex: 0xffa500, name: "Orange", css: "#ffa500" },
+            { hex: 0x800080, name: "Purple", css: "#800080" },
+            { hex: 0x0000ff, name: "Blue", css: "#0000ff" },
+            { hex: 0xffffff, name: "White", css: "#ffffff" }
+        ];
+        let currentColorIndex = 0;
+
+        // Camera
+        camera.position.set(0, 5, -10);
+
+        // Controls
+        const keys = {};
+        document.addEventListener('keydown', (event) => keys[event.key] = true);
+        document.addEventListener('keyup', (event) => keys[event.key] = false);
+
+        const speed = 0.1;
+        const turnSpeed = 0.03;
+        let gameOver = false;
+        let gameStarted = false;
+
+        // WebSocket setup
+        const socket = new WebSocket(`wss://${window.location.host}`); // Render assigns domain
+        let myId;
+        const otherPlayers = {};
+
+        socket.onopen = () => console.log('Connected to server');
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            switch (data.type) {
+                case 'init':
+                    myId = data.id;
+                    for (let id in data.players) {
+                        if (id != myId) addOtherPlayer(data.players[id]);
+                    }
+                    break;
+                case 'newPlayer':
+                    addOtherPlayer(data.player);
+                    break;
+                case 'update':
+                    updateOtherPlayer(data.player);
+                    break;
+                case 'removePlayer':
+                    removeOtherPlayer(data.id);
+                    break;
+            }
+        };
+
+        function addOtherPlayer(player) {
+            loader.load('./models/bike/scene.gltf', (gltf) => {
+                const otherBike = gltf.scene;
+                otherBike.scale.set(2, 2, 2);
+                scene.add(otherBike);
+                otherPlayers[player.id] = {
+                    model: otherBike,
+                    trailSegments: [],
+                    trailMaterial: new THREE.MeshPhongMaterial({ 
+                        color: player.color, 
+                        emissive: player.color, 
+                        emissiveIntensity: 0.8 
+                    })
+                };
+                updateOtherPlayer(player);
+            });
+        }
+
+        function updateOtherPlayer(player) {
+            if (otherPlayers[player.id]) {
+                const other = otherPlayers[player.id];
+                other.model.position.set(player.position.x, player.position.y, player.position.z);
+                other.model.rotation.y = player.rotation;
+                other.trailMaterial.color.setHex(player.color);
+                other.trailMaterial.emissive.setHex(player.color);
+
+                if (player.trail.length > other.trailSegments.length) {
+                    const newTrail = player.trail[player.trail.length - 1];
+                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
+                    const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
+                    trailSegment.position.set(newTrail.x, newTrail.y, newTrail.z);
+                    scene.add(trailSegment);
+                    other.trailSegments.push(trailSegment);
+                }
+            }
+        }
+
+        function removeOtherPlayer(id) {
+            if (otherPlayers[id]) {
+                scene.remove(otherPlayers[id].model);
+                otherPlayers[id].trailSegments.forEach(segment => scene.remove(segment));
+                delete otherPlayers[id];
+            }
+        }
+
+        // Resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Collision check
+        function checkCollision(bikePos) {
+            const bikeRadius = 0.1;
+            for (let segments of [trailSegments, ...Object.values(otherPlayers).map(p => p.trailSegments)]) {
+                for (let segment of segments) {
+                    const trailPos = segment.position;
+                    const dx = bikePos.x - trailPos.x;
+                    const dz = bikePos.z - trailPos.z;
+                    const distance = Math.sqrt(dx * dx + dz * dz);
+                    if (distance < bikeRadius + trailWidth) return true;
+                }
+            }
+            return false;
+        }
+
+        // Boundary check
+        function checkBoundaries(bikePos) {
+            const halfGrid = gridSize / 2;
+            return bikePos.x < -halfGrid || bikePos.x > halfGrid || bikePos.z < -halfGrid || bikePos.z > halfGrid;
+        }
+
+        // Buttons
+        const startButton = document.getElementById('startButton');
+        const colorButton = document.getElementById('colorButton');
+        startButton.addEventListener('click', () => {
+            gameStarted = true;
+            startButton.style.display = 'none';
+            colorButton.style.display = 'none';
+            animate();
+        });
+
+        function updateColorButton() {
+            const currentColor = colors[currentColorIndex];
+            colorButton.style.backgroundColor = currentColor.css;
+            colorButton.style.color = "#000000";
+        }
+        updateColorButton();
+
+        colorButton.addEventListener('click', () => {
+            currentColorIndex = (currentColorIndex + 1) % colors.length;
+            const newColor = colors[currentColorIndex];
+            trailMaterial.color.setHex(newColor.hex);
+            trailMaterial.emissive.setHex(newColor.hex);
+            trailSegments.forEach(segment => {
+                segment.material.color.setHex(newColor.hex);
+                segment.material.emissive.setHex(newColor.hex);
+            });
+            if (bikeModel) {
+                bikeModel.traverse(child => {
+                    if (child.isMesh && child.material) child.material.color.setHex(newColor.hex);
+                });
+            }
+            updateColorButton();
+        });
+
+        // Animation loop
+        function animate() {
+            if (!gameStarted) {
+                renderer.render(scene, camera);
+                return;
+            }
+
+            requestAnimationFrame(animate);
+
+            if (bikeModel && !gameOver) {
+                bikeModel.position.z += speed * Math.cos(bikeModel.rotation.y);
+                bikeModel.position.x += speed * Math.sin(bikeModel.rotation.y);
+
+                if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed;
+                if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed;
+
+                if (lastTrailPosition && bikeModel.position.distanceTo(lastTrailPosition) > trailWidth * 3) {
+                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
+                    const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
+                    const offset = new THREE.Vector3(speed * Math.sin(bikeModel.rotation.y), 0, speed * Math.cos(bikeModel.rotation.y)).multiplyScalar(5);
+                    trailSegment.position.copy(bikeModel.position).sub(offset);
+                    trailSegment.position.y = -0.5 + trailHeight / 2;
+                    scene.add(trailSegment);
+                    trailSegments.push(trailSegment);
+
+                    if (trailSegments.length > maxTrailSegments) {
+                        scene.remove(trailSegments.shift());
+                    }
+                    lastTrailPosition.copy(bikeModel.position);
+                } else if (!lastTrailPosition) {
+                    lastTrailPosition = bikeModel.position.clone();
+                }
+
+                if (checkCollision(bikeModel.position)) {
+                    gameOver = true;
+                    console.log("Game Over! Crashed into a trail.");
+                    alert("Game Over! Refresh to restart.");
+                } else if (checkBoundaries(bikeModel.position)) {
+                    gameOver = true;
+                    console.log("Game Over! Out of bounds.");
+                    alert("Game Over! Refresh to restart.");
+                }
+
+                // Send update to server
+                socket.send(JSON.stringify({
+                    type: 'update',
+                    position: bikeModel.position,
+                    rotation: bikeModel.rotation.y,
+                    trail: trailSegments.map(seg => seg.position),
+                    color: colors[currentColorIndex].hex
+                }));
+
+                // Camera follow
+                const offset = new THREE.Vector3(0, 5, -10);
+                const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
+                camera.position.lerp(cameraPosition, 0.1);
+                camera.lookAt(bikeModel.position);
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

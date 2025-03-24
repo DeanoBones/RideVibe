@@ -1,0 +1,8 @@
+Model Information:
+* title:	Encom 786 | Flynn's Lightcycle | Tron: Evolution
+* source:	https://sketchfab.com/3d-models/encom-786-flynns-lightcycle-tron-evolution-61ff800bc65e49f3ba3e1f4f7de92542
+* author:	Shriker1 (https://sketchfab.com/Shriker1)
+
+Model License:
+* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
+* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works
