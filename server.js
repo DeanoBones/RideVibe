@@ -7,13 +7,19 @@ const path = require('path');
 // Serve the index.html at root path
 app.get('/', (req, res) => {
     const indexPath = path.join(__dirname, 'public', 'index.html');
-    console.log('Serving index.html from:', indexPath);  // Add this line for debugging
-    res.sendFile(indexPath);
+    console.log('Looking for index.html at:', indexPath);  // Log the resolved path
+    res.sendFile(indexPath, (err) => {
+        if (err) {
+            console.log('Error sending index.html:', err);  // Log any error
+            res.status(500).send('Error loading index.html');
+        }
+    });
 });
 
 
 // Serve static files from 'public' folder
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
+
 
 // Start HTTP server
 const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
