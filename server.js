@@ -1,76 +1,41 @@
 const express = require('express');
-const { Server } = require('ws');
+const WebSocket = require('ws');
 const app = express();
-const PORT = process.env.PORT || 3000; // Render assigns PORT
-const path = require('path');
+const server = app.listen(process.env.PORT || 3000);
+const wss = new WebSocket.Server({ server });
 
-// Serve the index.html at root path
-app.get('/', (req, res) => {
-    const indexPath = path.join(__dirname, 'public', 'index.html');
-    console.log('Looking for index.html at:', indexPath);  // Log the resolved path
-    res.sendFile(indexPath, (err) => {
-        if (err) {
-            console.log('Error sending index.html:', err);  // Log any error
-            res.status(500).send('Error loading index.html');
-        }
-    });
-});
+app.use(express.static('public'));
 
-
-// Serve static files from 'public' folder
-app.use(express.static(path.join(__dirname, 'public')));
-
-
-// Start HTTP server
-const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
-// WebSocket server
-const wss = new Server({ server });
-let players = {};
+const players = {};
 
 wss.on('connection', (ws) => {
-    const playerId = Date.now(); // Unique ID for each player
-    players[playerId] = { 
-        id: playerId, 
-        position: { x: 0, y: 0, z: 0 }, 
-        rotation: 0, 
-        trail: [], 
-        color: 0x00ffff // Default color
-    };
+    const id = Date.now();
+    players[id] = { id, position: { x: 0, y: 0, z: 0 }, rotation: 0, color: 0x00ffff };
+    ws.send(JSON.stringify({ type: 'init', id, players }));
 
-    // Send initial state to new player
-    ws.send(JSON.stringify({ type: 'init', id: playerId, players }));
-
-    // Broadcast new player to others
     wss.clients.forEach(client => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'newPlayer', player: players[playerId] }));
-        }
+        if (client !== ws) client.send(JSON.stringify({ type: 'newPlayer', player: players[id] }));
     });
 
     ws.on('message', (message) => {
         const data = JSON.parse(message);
         if (data.type === 'update') {
-            players[playerId].position = data.position;
-            players[playerId].rotation = data.rotation;
-            players[playerId].trail = data.trail;
-            players[playerId].color = data.color;
-
-            // Broadcast update to others
+            players[id] = { 
+                id, 
+                position: data.position, 
+                rotation: data.rotation, 
+                newTrail: data.newTrail, 
+                spawnTime: data.spawnTime, 
+                color: data.color 
+            };
             wss.clients.forEach(client => {
-                if (client !== ws && client.readyState === WebSocket.OPEN) {
-                    client.send(JSON.stringify({ type: 'update', player: players[playerId] }));
-                }
+                if (client !== ws) client.send(JSON.stringify({ type: 'update', player: players[id] }));
             });
         }
     });
 
     ws.on('close', () => {
-        delete players[playerId];
-        wss.clients.forEach(client => {
-            if (client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({ type: 'removePlayer', id: playerId }));
-            }
-        });
+        delete players[id];
+        wss.clients.forEach(client => client.send(JSON.stringify({ type: 'removePlayer', id })));
     });
 });
