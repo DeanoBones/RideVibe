@@ -85,10 +85,11 @@
         document.addEventListener('keydown', (event) => keys[event.key] = true);
         document.addEventListener('keyup', (event) => keys[event.key] = false);
 
-        const speed = 0.1;
-        const turnSpeed = 0.03;
+        const speed = 6; // Units per second (was 0.1 per frame, 6 = 0.1 * 60 FPS)
+        const turnSpeed = 1.8; // Radians per second (was 0.03 per frame, 1.8 = 0.03 * 60 FPS)
         let gameOver = false;
         let gameStarted = false;
+        let lastTime = 0; // For delta time
 
         const socket = new WebSocket(`wss://${window.location.host}`);
         let myId;
@@ -150,7 +151,6 @@
                     other.trailSegments.push({ mesh: trailSegment, spawnTime: player.spawnTime });
                 }
 
-                // Remove expired cubes
                 other.trailSegments = other.trailSegments.filter(segment => {
                     if (performance.now() - segment.spawnTime > cubeLifetime) {
                         scene.remove(segment.mesh);
@@ -200,7 +200,7 @@
             gameStarted = true;
             startButton.style.display = 'none';
             colorButton.style.display = 'none';
-            animate(0); // Start with timestamp
+            animate(0);
         });
 
         function updateColorButton() {
@@ -236,17 +236,22 @@
             requestAnimationFrame(animate);
 
             if (bikeModel && !gameOver) {
-                bikeModel.position.z += speed * Math.cos(bikeModel.rotation.y);
-                bikeModel.position.x += speed * Math.sin(bikeModel.rotation.y);
+                // Calculate delta time in seconds
+                const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60; // Default to 60 FPS if first frame
+                lastTime = timestamp;
 
-                if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed;
-                if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed;
+                // Move with delta time
+                bikeModel.position.z += speed * Math.cos(bikeModel.rotation.y) * deltaTime;
+                bikeModel.position.x += speed * Math.sin(bikeModel.rotation.y) * deltaTime;
+
+                if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed * deltaTime;
+                if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed * deltaTime;
 
                 // Spawn cube every 0.1 seconds
                 if (timestamp - lastSpawnTime >= spawnInterval) {
                     const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
                     const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                    const offset = new THREE.Vector3(speed * Math.sin(bikeModel.rotation.y), 0, speed * Math.cos(bikeModel.rotation.y)).multiplyScalar(5);
+                    const offset = new THREE.Vector3(speed * Math.sin(bikeModel.rotation.y), 0, speed * Math.cos(bikeModel.rotation.y)).multiplyScalar(5 * deltaTime);
                     trailSegment.position.copy(bikeModel.position).sub(offset);
                     trailSegment.position.y = -0.5 + trailHeight / 2;
                     scene.add(trailSegment);
