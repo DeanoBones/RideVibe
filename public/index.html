@@ -265,7 +265,7 @@
                     -speed * Math.sin(bikeModel.rotation.y), // Negative to go opposite direction
                     0,
                     -speed * Math.cos(bikeModel.rotation.y)
-                ).multiplyScalar(5); // Match cube offset
+                ).multiplyScalar(50); // Match cube offset
                 const newPoint = bikeModel.position.clone().sub(offset);
                 newPoint.y = 0.5; // Match trail height
                 if (trailPoints.length === 0 || bikeModel.position.distanceTo(trailPoints[trailPoints.length - 1]) > 0.5) {
