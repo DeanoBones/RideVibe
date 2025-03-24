@@ -6,8 +6,11 @@ const path = require('path');
 
 // Serve the index.html at root path
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    console.log('Serving index.html from:', indexPath);  // Add this line for debugging
+    res.sendFile(indexPath);
 });
+
 
 // Serve static files from 'public' folder
 app.use(express.static('public'));
