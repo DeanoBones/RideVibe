@@ -59,9 +59,10 @@
         });
 
         let trailMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
-        const trailHeight = 2;
-        const trailWidth = 0.15;
-        let trailSegments = []; // Now stores { mesh, spawnTime }
+        const trailHeight = 2; // Height (y)
+        const trailWidth = 2; // Width (x) - wider for wall effect
+        const trailDepth = 0.15; // Depth (z) - thin along bike's path
+        let trailSegments = [];
         let lastSpawnTime = 0;
         const spawnInterval = 100; // 0.1 seconds in ms
         const cubeLifetime = 10000; // 10 seconds in ms
@@ -85,11 +86,11 @@
         document.addEventListener('keydown', (event) => keys[event.key] = true);
         document.addEventListener('keyup', (event) => keys[event.key] = false);
 
-        const speed = 6; // Units per second (was 0.1 per frame, 6 = 0.1 * 60 FPS)
-        const turnSpeed = 1.8; // Radians per second (was 0.03 per frame, 1.8 = 0.03 * 60 FPS)
+        const speed = 6;
+        const turnSpeed = 1.8;
         let gameOver = false;
         let gameStarted = false;
-        let lastTime = 0; // For delta time
+        let lastTime = 0;
 
         const socket = new WebSocket(`wss://${window.location.host}`);
         let myId;
@@ -144,7 +145,7 @@
                 other.trailMaterial.emissive.setHex(player.color);
 
                 if (player.newTrail) {
-                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
+                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth); // Wider wall
                     const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
                     trailSegment.position.set(player.newTrail.x, player.newTrail.y, player.newTrail.z);
                     scene.add(trailSegment);
@@ -183,7 +184,7 @@
                     const dx = bikePos.x - trailPos.x;
                     const dz = bikePos.z - trailPos.z;
                     const distance = Math.sqrt(dx * dx + dz * dz);
-                    if (distance < bikeRadius + trailWidth) return true;
+                    if (distance < bikeRadius + trailWidth / 2) return true; // Adjust for wider wall
                 }
             }
             return false;
@@ -236,22 +237,23 @@
             requestAnimationFrame(animate);
 
             if (bikeModel && !gameOver) {
-                // Calculate delta time in seconds
-                const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60; // Default to 60 FPS if first frame
+                const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60;
                 lastTime = timestamp;
 
-                // Move with delta time
                 bikeModel.position.z += speed * Math.cos(bikeModel.rotation.y) * deltaTime;
                 bikeModel.position.x += speed * Math.sin(bikeModel.rotation.y) * deltaTime;
 
                 if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed * deltaTime;
                 if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed * deltaTime;
 
-                // Spawn cube every 0.1 seconds
                 if (timestamp - lastSpawnTime >= spawnInterval) {
-                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
+                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth); // Wider wall
                     const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                    const offset = new THREE.Vector3(speed * Math.sin(bikeModel.rotation.y), 0, speed * Math.cos(bikeModel.rotation.y)).multiplyScalar(50 * deltaTime);
+                    const offset = new THREE.Vector3(
+                        speed * Math.sin(bikeModel.rotation.y),
+                        0,
+                        speed * Math.cos(bikeModel.rotation.y)
+                    ).multiplyScalar(2);
                     trailSegment.position.copy(bikeModel.position).sub(offset);
                     trailSegment.position.y = -0.5 + trailHeight / 2;
                     scene.add(trailSegment);
@@ -260,7 +262,6 @@
                     lastSpawnTime = timestamp;
                 }
 
-                // Remove expired cubes
                 trailSegments = trailSegments.filter(segment => {
                     if (timestamp - segment.spawnTime > cubeLifetime) {
                         scene.remove(segment.mesh);
