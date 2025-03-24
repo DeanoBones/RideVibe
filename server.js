@@ -7,41 +7,42 @@ const wss = new WebSocket.Server({ server });
 app.use(express.static('public'));
 
 const players = {};
-const gridSize = 100;
-const halfGrid = gridSize / 2;
 
 wss.on('connection', (ws) => {
     const id = Date.now();
-    players[id] = { 
-        id, 
-        position: { x: 0, y: 0, z: 0 }, 
-        rotation: 0, 
-        color: 0x00ffff // Default cyan
-    };
-    ws.send(JSON.stringify({ type: 'init', id, players }));
-
-    wss.clients.forEach(client => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'newPlayer', player: players[id] }));
-        }
-    });
+    players[id] = { id };
+    ws.send(JSON.stringify({ type: 'init', id }));
 
     ws.on('message', (message) => {
         const data = JSON.parse(message);
-        if (data.type === 'update') {
-            players[id] = { 
-                id, 
-                position: data.position, 
-                rotation: data.rotation, 
-                newTrail: data.newTrail, 
-                spawnTime: data.spawnTime, 
-                color: data.color || players[id].color 
+        if (data.type === 'start') {
+            players[id] = {
+                id: data.id,
+                position: data.position,
+                rotation: data.rotation,
+                color: data.color
             };
             wss.clients.forEach(client => {
                 if (client !== ws && client.readyState === WebSocket.OPEN) {
-                    client.send(JSON.stringify({ type: 'update', player: players[id] }));
+                    client.send(JSON.stringify({ type: 'start', ...players[id] }));
                 }
             });
+        } else if (data.type === 'update') {
+            if (players[id]) {
+                players[id] = {
+                    id: data.id || id,
+                    position: data.position,
+                    rotation: data.rotation,
+                    color: data.color || players[id].color,
+                    newTrail: data.newTrail,
+                    spawnTime: data.spawnTime
+                };
+                wss.clients.forEach(client => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ type: 'update', ...players[id] }));
+                    }
+                });
+            }
         }
     });
 

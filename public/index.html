@@ -4,7 +4,7 @@
     <style>
         body { margin: 0; }
         canvas { width: 100%; height: 100vh; }
-        #startButton, #colorButton {
+        #startButton, #colorButton, #restartButton {
             position: absolute;
             top: 20px;
             left: 20px;
@@ -12,15 +12,14 @@
             font-size: 16px;
             cursor: pointer;
         }
-        #colorButton { 
-            top: 60px; 
-            transition: background-color 0.3s;
-        }
+        #colorButton { top: 60px; transition: background-color 0.3s; }
+        #restartButton { top: 100px; display: none; }
     </style>
 </head>
 <body>
     <button id="startButton">Start</button>
     <button id="colorButton">Change Color</button>
+    <button id="restartButton">Restart</button>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
     <script>
@@ -94,15 +93,12 @@
             switch (data.type) {
                 case 'init':
                     myId = data.id;
-                    for (let id in data.players) {
-                        if (id != myId) addOtherPlayer(data.players[id]);
-                    }
                     break;
-                case 'newPlayer':
-                    addOtherPlayer(data.player);
+                case 'start':
+                    if (data.id !== myId) addOtherPlayer(data);
                     break;
                 case 'update':
-                    updateOtherPlayer(data.player);
+                    updateOtherPlayer(data);
                     break;
                 case 'removePlayer':
                     removeOtherPlayer(data.id);
@@ -115,7 +111,11 @@
                 loader.load('./models/bike/scene.gltf', (gltf) => {
                     const otherBike = gltf.scene;
                     otherBike.scale.set(2, 2, 2);
-                    otherBike.visible = false;
+                    otherBike.position.set(player.position.x, player.position.y, player.position.z);
+                    otherBike.rotation.y = player.rotation;
+                    otherBike.traverse(child => {
+                        if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
+                    });
                     scene.add(otherBike);
                     otherPlayers[player.id] = {
                         model: otherBike,
@@ -124,11 +124,8 @@
                             color: player.color || 0x00ffff, 
                             emissive: player.color || 0x00ffff, 
                             emissiveIntensity: 0.8 
-                        }),
-                        hasStarted: false,
-                        pendingTrails: [] // Queue for early trails
+                        })
                     };
-                    updateOtherPlayer(player);
                 });
             }
         }
@@ -138,47 +135,21 @@
                 const other = otherPlayers[player.id];
                 other.model.position.set(player.position.x, player.position.y, player.position.z);
                 other.model.rotation.y = player.rotation;
-                other.trailMaterial.color.setHex(player.color || 0x00ffff);
-                other.trailMaterial.emissive.setHex(player.color || 0x00ffff);
-                other.model.traverse(child => {
-                    if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
-                });
-
-                // Mark as started if we get a color or position update
-                if (player.color || player.position.x !== 0 || player.position.z !== 0) {
-                    if (!other.hasStarted) {
-                        other.hasStarted = true;
-                        other.model.visible = true;
-                        // Spawn any pending trails
-                        other.pendingTrails.forEach(trail => {
-                            const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-                            const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
-                            trailSegment.position.set(trail.position.x, trail.position.y, trail.position.z);
-                            trailSegment.rotation.y = trail.rotation + Math.PI / 2;
-                            scene.add(trailSegment);
-                            other.trailSegments.push({ mesh: trailSegment, spawnTime: trail.spawnTime });
-                        });
-                        other.pendingTrails = [];
-                    }
+                if (player.color) {
+                    other.trailMaterial.color.setHex(player.color);
+                    other.trailMaterial.emissive.setHex(player.color);
+                    other.model.traverse(child => {
+                        if (child.isMesh && child.material) child.material.color.setHex(player.color);
+                    });
                 }
-
                 if (player.newTrail) {
-                    if (other.hasStarted) {
-                        const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-                        const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
-                        trailSegment.position.set(player.newTrail.x, player.newTrail.y, player.newTrail.z);
-                        trailSegment.rotation.y = player.rotation + Math.PI / 2;
-                        scene.add(trailSegment);
-                        other.trailSegments.push({ mesh: trailSegment, spawnTime: player.spawnTime });
-                    } else {
-                        other.pendingTrails.push({
-                            position: player.newTrail,
-                            rotation: player.rotation,
-                            spawnTime: player.spawnTime
-                        });
-                    }
+                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
+                    const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
+                    trailSegment.position.set(player.newTrail.x, player.newTrail.y, player.newTrail.z);
+                    trailSegment.rotation.y = player.rotation + Math.PI / 2;
+                    scene.add(trailSegment);
+                    other.trailSegments.push({ mesh: trailSegment, spawnTime: player.spawnTime });
                 }
-
                 other.trailSegments = other.trailSegments.filter(segment => {
                     if (performance.now() - segment.spawnTime > cubeLifetime) {
                         scene.remove(segment.mesh);
@@ -195,6 +166,16 @@
                 otherPlayers[id].trailSegments.forEach(segment => scene.remove(segment.mesh));
                 delete otherPlayers[id];
             }
+        }
+
+        function resetGame() {
+            if (bikeModel) scene.remove(bikeModel);
+            trailSegments.forEach(segment => scene.remove(segment.mesh));
+            trailSegments = [];
+            bikeModel = null;
+            gameOver = false;
+            gameStarted = false;
+            lastSpawnTime = 0;
         }
 
         window.addEventListener('resize', () => {
@@ -224,40 +205,46 @@
 
         const startButton = document.getElementById('startButton');
         const colorButton = document.getElementById('colorButton');
+        const restartButton = document.getElementById('restartButton');
         startButton.addEventListener('click', () => {
             if (!gameStarted) {
-                gameStarted = true;
-                startButton.style.display = 'none';
-                colorButton.style.display = 'none';
-                
-                loader.load('./models/bike/scene.gltf', (gltf) => {
-                    bikeModel = gltf.scene;
-                    scene.add(bikeModel);
-                    bikeModel.scale.set(2, 2, 2);
-                    const halfGrid = gridSize / 2;
-                    bikeModel.position.set(
-                        Math.random() * gridSize - halfGrid,
-                        0,
-                        Math.random() * gridSize - halfGrid
-                    );
-                    bikeModel.rotation.y = 0;
-                    const startColor = colors[currentColorIndex].hex;
-                    bikeModel.traverse(child => {
-                        if (child.isMesh && child.material) child.material.color.setHex(startColor);
-                    });
-                    trailMaterial.color.setHex(startColor);
-                    trailMaterial.emissive.setHex(startColor);
-                    socket.send(JSON.stringify({
-                        type: 'update',
-                        position: bikeModel.position,
-                        rotation: bikeModel.rotation.y,
-                        color: startColor
-                    }));
-                });
-
-                animate(0);
+                startGame();
             }
         });
+
+        function startGame() {
+            gameStarted = true;
+            startButton.style.display = 'none';
+            colorButton.style.display = 'none';
+            restartButton.style.display = 'none';
+            
+            loader.load('./models/bike/scene.gltf', (gltf) => {
+                bikeModel = gltf.scene;
+                scene.add(bikeModel);
+                bikeModel.scale.set(2, 2, 2);
+                const halfGrid = gridSize / 2;
+                bikeModel.position.set(
+                    Math.random() * gridSize - halfGrid,
+                    0,
+                    Math.random() * gridSize - halfGrid
+                );
+                bikeModel.rotation.y = 0;
+                const startColor = colors[currentColorIndex].hex;
+                bikeModel.traverse(child => {
+                    if (child.isMesh && child.material) child.material.color.setHex(startColor);
+                });
+                trailMaterial.color.setHex(startColor);
+                trailMaterial.emissive.setHex(startColor);
+                socket.send(JSON.stringify({
+                    type: 'start',
+                    id: myId,
+                    position: bikeModel.position,
+                    rotation: bikeModel.rotation.y,
+                    color: startColor
+                }));
+                animate(0);
+            });
+        }
 
         function updateColorButton() {
             const currentColor = colors[currentColorIndex];
@@ -287,6 +274,11 @@
                 }));
             }
             updateColorButton();
+        });
+
+        restartButton.addEventListener('click', () => {
+            resetGame();
+            startGame();
         });
 
         function animate(timestamp) {
@@ -332,14 +324,10 @@
                     return true;
                 });
 
-                if (checkCollision(bikeModel.position)) {
+                if (checkCollision(bikeModel.position) || checkBoundaries(bikeModel.position)) {
                     gameOver = true;
-                    console.log("Game Over! Crashed into a trail.");
-                    alert("Game Over! Refresh to restart.");
-                } else if (checkBoundaries(bikeModel.position)) {
-                    gameOver = true;
-                    console.log("Game Over! Out of bounds.");
-                    alert("Game Over! Refresh to restart.");
+                    console.log("Game Over!");
+                    restartButton.style.display = 'block';
                 }
 
                 socket.send(JSON.stringify({
