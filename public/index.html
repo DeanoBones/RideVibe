@@ -98,11 +98,9 @@
         let gameStarted = false;
 
         // WebSocket setup
-        const socket = new WebSocket(`wss://${window.location.host}`);
+        const socket = new WebSocket(`wss://${window.location.host}`); // Render assigns domain
         let myId;
         const otherPlayers = {};
-        let lastUpdateTime = 0;
-        const updateInterval = 50; // Send updates every 50ms
 
         socket.onopen = () => console.log('Connected to server');
         socket.onmessage = (event) => {
@@ -138,9 +136,7 @@
                         color: player.color, 
                         emissive: player.color, 
                         emissiveIntensity: 0.8 
-                    }),
-                    targetPosition: new THREE.Vector3(player.position.x, player.position.y, player.position.z),
-                    targetRotation: player.rotation
+                    })
                 };
                 updateOtherPlayer(player);
             });
@@ -149,29 +145,19 @@
         function updateOtherPlayer(player) {
             if (otherPlayers[player.id]) {
                 const other = otherPlayers[player.id];
-                other.targetPosition = new THREE.Vector3(player.position.x, player.position.y, player.position.z);
-                other.targetRotation = player.rotation;
+                other.model.position.set(player.position.x, player.position.y, player.position.z);
+                other.model.rotation.y = player.rotation;
                 other.trailMaterial.color.setHex(player.color);
                 other.trailMaterial.emissive.setHex(player.color);
 
-                if (player.newTrailSegment) { // Only add new segments
+                if (player.trail.length > other.trailSegments.length) {
+                    const newTrail = player.trail[player.trail.length - 1];
                     const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
                     const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
-                    trailSegment.position.set(player.newTrailSegment.x, player.newTrailSegment.y, player.newTrailSegment.z);
+                    trailSegment.position.set(newTrail.x, newTrail.y, newTrail.z);
                     scene.add(trailSegment);
                     other.trailSegments.push(trailSegment);
-                    if (other.trailSegments.length > maxTrailSegments) {
-                        scene.remove(other.trailSegments.shift());
-                    }
                 }
-            }
-        }
-
-        function interpolateOtherPlayers() {
-            for (let id in otherPlayers) {
-                const other = otherPlayers[id];
-                other.model.position.lerp(other.targetPosition, 0.1); // Smooth movement
-                other.model.rotation.y = THREE.MathUtils.lerp(other.model.rotation.y, other.targetRotation, 0.1);
             }
         }
 
@@ -246,7 +232,7 @@
         });
 
         // Animation loop
-        function animate(timestamp) {
+        function animate() {
             if (!gameStarted) {
                 renderer.render(scene, camera);
                 return;
@@ -261,7 +247,6 @@
                 if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed;
                 if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed;
 
-                let newTrailSegment = null;
                 if (lastTrailPosition && bikeModel.position.distanceTo(lastTrailPosition) > trailWidth * 3) {
                     const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
                     const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
@@ -270,7 +255,6 @@
                     trailSegment.position.y = -0.5 + trailHeight / 2;
                     scene.add(trailSegment);
                     trailSegments.push(trailSegment);
-                    newTrailSegment = trailSegment.position.clone();
 
                     if (trailSegments.length > maxTrailSegments) {
                         scene.remove(trailSegments.shift());
@@ -290,20 +274,14 @@
                     alert("Game Over! Refresh to restart.");
                 }
 
-                // Throttle updates
-                if (timestamp - lastUpdateTime > updateInterval) {
-                    socket.send(JSON.stringify({
-                        type: 'update',
-                        position: bikeModel.position,
-                        rotation: bikeModel.rotation.y,
-                        newTrailSegment: newTrailSegment, // Send only new segment
-                        color: colors[currentColorIndex].hex
-                    }));
-                    lastUpdateTime = timestamp;
-                }
-
-                // Smooth other players
-                interpolateOtherPlayers();
+                // Send update to server
+                socket.send(JSON.stringify({
+                    type: 'update',
+                    position: bikeModel.position,
+                    rotation: bikeModel.rotation.y,
+                    trail: trailSegments.map(seg => seg.position),
+                    color: colors[currentColorIndex].hex
+                }));
 
                 // Camera follow
                 const offset = new THREE.Vector3(0, 5, -10);
@@ -314,7 +292,7 @@
 
             renderer.render(scene, camera);
         }
-        animate(0);
+        animate();
     </script>
 </body>
 </html>
