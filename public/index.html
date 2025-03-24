@@ -18,8 +18,7 @@
         }
         #restartButton {
             top: 100px;
-            left: 20px;
-            display: none; /* Hidden initially */
+            display: none; /* Initially hidden */
         }
     </style>
 </head>
@@ -27,6 +26,7 @@
     <button id="startButton">Start</button>
     <button id="colorButton">Change Color</button>
     <button id="restartButton">Restart</button>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
     <script>
@@ -207,17 +207,28 @@
         const startButton = document.getElementById('startButton');
         const colorButton = document.getElementById('colorButton');
         const restartButton = document.getElementById('restartButton');
-
+        
         startButton.addEventListener('click', () => {
             gameStarted = true;
             startButton.style.display = 'none';
             colorButton.style.display = 'none';
+            restartButton.style.display = 'none';
             animate();
         });
 
         restartButton.addEventListener('click', () => {
-            // Restart game
-            location.reload();  // This reloads the entire page, effectively restarting the game
+            // Reset game state
+            gameStarted = true;
+            gameOver = false;
+            trailSegments.forEach(segment => scene.remove(segment));
+            trailSegments = [];
+            if (bikeModel) {
+                bikeModel.position.set(0, 0, 0);
+                bikeModel.rotation.y = 0;
+            }
+            lastTrailPosition = null;
+            restartButton.style.display = 'none'; // Hide restart button after restarting
+            animate();
         });
 
         function updateColorButton() {
@@ -280,13 +291,13 @@
                 if (checkCollision(bikeModel.position)) {
                     gameOver = true;
                     console.log("Game Over! Crashed into a trail.");
-                    alert("Game Over! Refresh to restart.");
-                    restartButton.style.display = 'inline';  // Show the restart button
+                    alert("Game Over!");
+                    restartButton.style.display = 'inline-block'; // Show the restart button
                 } else if (checkBoundaries(bikeModel.position)) {
                     gameOver = true;
                     console.log("Game Over! Out of bounds.");
-                    alert("Game Over! Refresh to restart.");
-                    restartButton.style.display = 'inline';  // Show the restart button
+                    alert("Game Over!");
+                    restartButton.style.display = 'inline-block'; // Show the restart button
                 }
 
                 // Send update to server
