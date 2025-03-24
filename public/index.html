@@ -54,18 +54,23 @@
             bikeModel = gltf.scene;
             scene.add(bikeModel);
             bikeModel.scale.set(2, 2, 2);
-            bikeModel.position.set(0, 0, 0);
+            const halfGrid = gridSize / 2;
+            bikeModel.position.set(
+                Math.random() * gridSize - halfGrid, // -50 to 50
+                0,
+                Math.random() * gridSize - halfGrid  // -50 to 50
+            );
             bikeModel.rotation.y = 0;
         });
 
         let trailMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
         const trailHeight = 2;
-        const trailWidth = 2; // Wide across path
-        const trailDepth = 0.15; // Thin along path
+        const trailWidth = 1;
+        const trailDepth = 0.15;
         let trailSegments = [];
         let lastSpawnTime = 0;
-        const spawnInterval = 100; // 0.1 seconds in ms
-        const cubeLifetime = 10000; // 10 seconds in ms
+        const spawnInterval = 100;
+        const cubeLifetime = 10000;
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -132,7 +137,7 @@
                         emissiveIntensity: 0.8 
                     })
                 };
-                updateOtherPlayer(player);
+                updateOtherPlayer(player); // Set initial position
             });
         }
 
@@ -148,7 +153,7 @@
                     const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
                     const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
                     trailSegment.position.set(player.newTrail.x, player.newTrail.y, player.newTrail.z);
-                    trailSegment.rotation.y = player.rotation + Math.PI / 2; // Rotate 90°
+                    trailSegment.rotation.y = player.rotation + Math.PI / 2;
                     scene.add(trailSegment);
                     other.trailSegments.push({ mesh: trailSegment, spawnTime: player.spawnTime });
                 }
@@ -254,10 +259,10 @@
                         speed * Math.sin(bikeModel.rotation.y),
                         0,
                         speed * Math.cos(bikeModel.rotation.y)
-                    ).multiplyScalar(0.5); // Closer: 3 units
+                    ).multiplyScalar(0.5);
                     trailSegment.position.copy(bikeModel.position).sub(offset);
                     trailSegment.position.y = -0.5 + trailHeight / 2;
-                    trailSegment.rotation.y = bikeModel.rotation.y + Math.PI / 2; // Rotate 90°
+                    trailSegment.rotation.y = bikeModel.rotation.y + Math.PI / 2;
                     scene.add(trailSegment);
                     trailSegments.push({ mesh: trailSegment, spawnTime: timestamp });
 

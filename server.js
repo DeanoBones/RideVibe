@@ -7,10 +7,21 @@ const wss = new WebSocket.Server({ server });
 app.use(express.static('public'));
 
 const players = {};
+const gridSize = 100;
+const halfGrid = gridSize / 2;
 
 wss.on('connection', (ws) => {
     const id = Date.now();
-    players[id] = { id, position: { x: 0, y: 0, z: 0 }, rotation: 0, color: 0x00ffff };
+    players[id] = { 
+        id, 
+        position: { 
+            x: Math.random() * gridSize - halfGrid, // -50 to 50
+            y: 0, 
+            z: Math.random() * gridSize - halfGrid  // -50 to 50
+        }, 
+        rotation: 0, 
+        color: 0x00ffff 
+    };
     ws.send(JSON.stringify({ type: 'init', id, players }));
 
     wss.clients.forEach(client => {
