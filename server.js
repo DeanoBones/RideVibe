@@ -2,6 +2,12 @@ const express = require('express');
 const { Server } = require('ws');
 const app = express();
 const PORT = process.env.PORT || 3000; // Render assigns PORT
+const path = require('path');
+
+// Serve the index.html at root path
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Serve static files from 'public' folder
 app.use(express.static('public'));
