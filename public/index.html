@@ -148,7 +148,7 @@
                     const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
                     const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
                     trailSegment.position.set(player.newTrail.x, player.newTrail.y, player.newTrail.z);
-                    trailSegment.rotation.y = player.rotation; // Align with bike
+                    trailSegment.rotation.y = player.rotation + Math.PI / 2; // Rotate 90°
                     scene.add(trailSegment);
                     other.trailSegments.push({ mesh: trailSegment, spawnTime: player.spawnTime });
                 }
@@ -254,10 +254,10 @@
                         speed * Math.sin(bikeModel.rotation.y),
                         0,
                         speed * Math.cos(bikeModel.rotation.y)
-                    ).multiplyScalar(2);
+                    ).multiplyScalar(0.5); // Closer: 3 units
                     trailSegment.position.copy(bikeModel.position).sub(offset);
                     trailSegment.position.y = -0.5 + trailHeight / 2;
-                    trailSegment.rotation.y = bikeModel.rotation.y; // Align with bike
+                    trailSegment.rotation.y = bikeModel.rotation.y + Math.PI / 2; // Rotate 90°
                     scene.add(trailSegment);
                     trailSegments.push({ mesh: trailSegment, spawnTime: timestamp });
 
