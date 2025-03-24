@@ -95,7 +95,9 @@
                 case 'init':
                     myId = data.id;
                     for (let id in data.players) {
-                        if (id != myId) addOtherPlayer(data.players[id]);
+                        if (id != myId && data.players[id].position.x !== 0) {
+                            addOtherPlayer(data.players[id]);
+                        }
                     }
                     break;
                 case 'newPlayer':
@@ -111,17 +113,20 @@
         };
 
         function addOtherPlayer(player) {
-            if (!otherPlayers[player.id]) {
+            if (!otherPlayers[player.id] && player.position.x !== 0) {
                 loader.load('./models/bike/scene.gltf', (gltf) => {
                     const otherBike = gltf.scene;
                     otherBike.scale.set(2, 2, 2);
+                    otherBike.traverse(child => {
+                        if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
+                    });
                     scene.add(otherBike);
                     otherPlayers[player.id] = {
                         model: otherBike,
                         trailSegments: [],
                         trailMaterial: new THREE.MeshPhongMaterial({ 
-                            color: player.color, 
-                            emissive: player.color, 
+                            color: player.color || 0x00ffff, 
+                            emissive: player.color || 0x00ffff, 
                             emissiveIntensity: 0.8 
                         })
                     };
@@ -135,10 +140,10 @@
                 const other = otherPlayers[player.id];
                 other.model.position.set(player.position.x, player.position.y, player.position.z);
                 other.model.rotation.y = player.rotation;
-                other.trailMaterial.color.setHex(player.color);
-                other.trailMaterial.emissive.setHex(player.color);
+                other.trailMaterial.color.setHex(player.color || 0x00ffff);
+                other.trailMaterial.emissive.setHex(player.color || 0x00ffff);
                 other.model.traverse(child => {
-                    if (child.isMesh && child.material) child.material.color.setHex(player.color);
+                    if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
                 });
 
                 if (player.newTrail) {
@@ -212,16 +217,17 @@
                         Math.random() * gridSize - halfGrid
                     );
                     bikeModel.rotation.y = 0;
+                    const startColor = colors[currentColorIndex].hex;
                     bikeModel.traverse(child => {
-                        if (child.isMesh && child.material) child.material.color.setHex(colors[currentColorIndex].hex);
+                        if (child.isMesh && child.material) child.material.color.setHex(startColor);
                     });
-                    trailMaterial.color.setHex(colors[currentColorIndex].hex);
-                    trailMaterial.emissive.setHex(colors[currentColorIndex].hex);
+                    trailMaterial.color.setHex(startColor);
+                    trailMaterial.emissive.setHex(startColor);
                     socket.send(JSON.stringify({
                         type: 'update',
                         position: bikeModel.position,
                         rotation: bikeModel.rotation.y,
-                        color: colors[currentColorIndex].hex
+                        color: startColor
                     }));
                 });
 
@@ -238,22 +244,22 @@
 
         colorButton.addEventListener('click', () => {
             currentColorIndex = (currentColorIndex + 1) % colors.length;
-            const newColor = colors[currentColorIndex];
-            trailMaterial.color.setHex(newColor.hex);
-            trailMaterial.emissive.setHex(newColor.hex);
-            trailSegments.forEach(segment => {
-                segment.mesh.material.color.setHex(newColor.hex);
-                segment.mesh.material.emissive.setHex(newColor.hex);
-            });
-            if (bikeModel) {
+            const newColor = colors[currentColorIndex].hex;
+            if (gameStarted && bikeModel) {
+                trailMaterial.color.setHex(newColor);
+                trailMaterial.emissive.setHex(newColor);
+                trailSegments.forEach(segment => {
+                    segment.mesh.material.color.setHex(newColor);
+                    segment.mesh.material.emissive.setHex(newColor);
+                });
                 bikeModel.traverse(child => {
-                    if (child.isMesh && child.material) child.material.color.setHex(newColor.hex);
+                    if (child.isMesh && child.material) child.material.color.setHex(newColor);
                 });
                 socket.send(JSON.stringify({
                     type: 'update',
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
-                    color: newColor.hex
+                    color: newColor
                 }));
             }
             updateColorButton();
@@ -318,7 +324,6 @@
                     rotation: bikeModel.rotation.y,
                     newTrail: trailSegments.length > 0 ? trailSegments[trailSegments.length - 1].mesh.position : null,
                     spawnTime: trailSegments.length > 0 ? trailSegments[trailSegments.length - 1].spawnTime : null
-                    // No color here—only send when it changes
                 }));
 
                 const offset = new THREE.Vector3(0, 5, -10);
