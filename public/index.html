@@ -59,25 +59,16 @@
             scene.add(bikeModel);
             bikeModel.scale.set(2, 2, 2);
             bikeModel.position.set(0, 0, 0);
-            bikeModel.rotation.y = Math.PI; // Rotate 180° to face positive Z
+            bikeModel.rotation.y = 0;
         });
 
-        // Trail setup (spline-based)
-        const trailPoints = [];
-        const maxTrailPoints = 50; // Increased for longer trail
-        let trailCurve, trailMesh;
-        const trailMaterial = new THREE.MeshPhongMaterial({ 
-            color: 0x00ffff, 
-            emissive: 0x00ffff, 
-            emissiveIntensity: 0.8 
-        });
-
-        function initTrail() {
-            trailCurve = new THREE.CatmullRomCurve3(trailPoints);
-            const trailGeometry = new THREE.TubeGeometry(trailCurve, 64, 0.15, 8, false);
-            trailMesh = new THREE.Mesh(trailGeometry, trailMaterial);
-            scene.add(trailMesh);
-        }
+        // Trail setup
+        let trailMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
+        const trailHeight = 2;
+        const trailWidth = 0.15;
+        let trailSegments = [];
+        let lastTrailPosition = null;
+        const maxTrailSegments = 200;
 
         // Colors
         const colors = [
@@ -107,7 +98,7 @@
         let gameStarted = false;
 
         // WebSocket setup
-        const socket = new WebSocket(`wss://${window.location.host}`);
+        const socket = new WebSocket(`wss://${window.location.host}`); // Render assigns domain
         let myId;
         const otherPlayers = {};
 
@@ -137,23 +128,15 @@
             loader.load('./models/bike/scene.gltf', (gltf) => {
                 const otherBike = gltf.scene;
                 otherBike.scale.set(2, 2, 2);
-                otherBike.rotation.y = Math.PI; // Match player bike orientation
                 scene.add(otherBike);
-                const otherTrailCurve = new THREE.CatmullRomCurve3([]);
-                const otherTrailGeometry = new THREE.TubeGeometry(otherTrailCurve, 64, 0.15, 8, false);
-                const otherTrailMaterial = new THREE.MeshPhongMaterial({ 
-                    color: player.color, 
-                    emissive: player.color, 
-                    emissiveIntensity: 0.8 
-                });
-                const otherTrailMesh = new THREE.Mesh(otherTrailGeometry, otherTrailMaterial);
-                scene.add(otherTrailMesh);
                 otherPlayers[player.id] = {
                     model: otherBike,
-                    trailPoints: [],
-                    trailCurve: otherTrailCurve,
-                    trailMesh: otherTrailMesh,
-                    trailMaterial: otherTrailMaterial
+                    trailSegments: [],
+                    trailMaterial: new THREE.MeshPhongMaterial({ 
+                        color: player.color, 
+                        emissive: player.color, 
+                        emissiveIntensity: 0.8 
+                    })
                 };
                 updateOtherPlayer(player);
             });
@@ -164,22 +147,24 @@
                 const other = otherPlayers[player.id];
                 other.model.position.set(player.position.x, player.position.y, player.position.z);
                 other.model.rotation.y = player.rotation;
-
-                if (player.trail.length > other.trailPoints.length) {
-                    other.trailPoints = player.trail.map(p => new THREE.Vector3(p.x, p.y, p.z));
-                    other.trailCurve.points = other.trailPoints;
-                    other.trailMesh.geometry.dispose();
-                    other.trailMesh.geometry = new THREE.TubeGeometry(other.trailCurve, 64, 0.15, 8, false);
-                }
                 other.trailMaterial.color.setHex(player.color);
                 other.trailMaterial.emissive.setHex(player.color);
+
+                if (player.trail.length > other.trailSegments.length) {
+                    const newTrail = player.trail[player.trail.length - 1];
+                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
+                    const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
+                    trailSegment.position.set(newTrail.x, newTrail.y, newTrail.z);
+                    scene.add(trailSegment);
+                    other.trailSegments.push(trailSegment);
+                }
             }
         }
 
         function removeOtherPlayer(id) {
             if (otherPlayers[id]) {
                 scene.remove(otherPlayers[id].model);
-                scene.remove(otherPlayers[id].trailMesh);
+                otherPlayers[id].trailSegments.forEach(segment => scene.remove(segment));
                 delete otherPlayers[id];
             }
         }
@@ -194,16 +179,13 @@
         // Collision check
         function checkCollision(bikePos) {
             const bikeRadius = 0.1;
-            const safeZone = 2;
-            for (let [index, points] of [trailPoints, ...Object.values(otherPlayers).map(p => p.trailPoints)].entries()) {
-                const isOwnTrail = index === 0;
-                for (let i = 0; i < points.length; i++) {
-                    if (isOwnTrail && i < safeZone) continue;
-                    const point = points[i];
-                    const dx = bikePos.x - point.x;
-                    const dz = bikePos.z - point.z;
+            for (let segments of [trailSegments, ...Object.values(otherPlayers).map(p => p.trailSegments)]) {
+                for (let segment of segments) {
+                    const trailPos = segment.position;
+                    const dx = bikePos.x - trailPos.x;
+                    const dz = bikePos.z - trailPos.z;
                     const distance = Math.sqrt(dx * dx + dz * dz);
-                    if (distance < bikeRadius + 0.15) return true;
+                    if (distance < bikeRadius + trailWidth) return true;
                 }
             }
             return false;
@@ -237,10 +219,10 @@
             const newColor = colors[currentColorIndex];
             trailMaterial.color.setHex(newColor.hex);
             trailMaterial.emissive.setHex(newColor.hex);
-            if (trailMesh) {
-                trailMesh.material.color.setHex(newColor.hex);
-                trailMesh.material.emissive.setHex(newColor.hex);
-            }
+            trailSegments.forEach(segment => {
+                segment.material.color.setHex(newColor.hex);
+                segment.material.emissive.setHex(newColor.hex);
+            });
             if (bikeModel) {
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(newColor.hex);
@@ -265,22 +247,21 @@
                 if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed;
                 if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed;
 
-                // Add spline point (offset forward if model faces -Z)
-                const offset = new THREE.Vector3(
-                    speed * Math.sin(bikeModel.rotation.y), // Positive to match -Z forward
-                    0,
-                    speed * Math.cos(bikeModel.rotation.y)
-                ).multiplyScalar(50); // Back to 5 for balance
-                const newPoint = bikeModel.position.clone().sub(offset); // Still subtract to place behind
-                newPoint.y = 0.5;
-                if (trailPoints.length === 0 || bikeModel.position.distanceTo(trailPoints[trailPoints.length - 1]) > 0.3) { // Reduced to 0.3 for denser points
-                    trailPoints.push(newPoint);
-                    if (trailPoints.length > maxTrailPoints) trailPoints.shift();
+                if (lastTrailPosition && bikeModel.position.distanceTo(lastTrailPosition) > trailWidth * 3) {
+                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailWidth);
+                    const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
+                    const offset = new THREE.Vector3(speed * Math.sin(bikeModel.rotation.y), 0, speed * Math.cos(bikeModel.rotation.y)).multiplyScalar(5);
+                    trailSegment.position.copy(bikeModel.position).sub(offset);
+                    trailSegment.position.y = -0.5 + trailHeight / 2;
+                    scene.add(trailSegment);
+                    trailSegments.push(trailSegment);
 
-                    if (!trailMesh) initTrail();
-                    trailCurve.points = trailPoints;
-                    trailMesh.geometry.dispose();
-                    trailMesh.geometry = new THREE.TubeGeometry(trailCurve, 64, 0.15, 8, false);
+                    if (trailSegments.length > maxTrailSegments) {
+                        scene.remove(trailSegments.shift());
+                    }
+                    lastTrailPosition.copy(bikeModel.position);
+                } else if (!lastTrailPosition) {
+                    lastTrailPosition = bikeModel.position.clone();
                 }
 
                 if (checkCollision(bikeModel.position)) {
@@ -298,13 +279,13 @@
                     type: 'update',
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
-                    trail: trailPoints,
+                    trail: trailSegments.map(seg => seg.position),
                     color: colors[currentColorIndex].hex
                 }));
 
                 // Camera follow
-                const offsetCam = new THREE.Vector3(0, 5, -10);
-                const cameraPosition = bikeModel.position.clone().add(offsetCam.applyQuaternion(bikeModel.quaternion));
+                const offset = new THREE.Vector3(0, 5, -10);
+                const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
                 camera.lookAt(bikeModel.position);
             }
