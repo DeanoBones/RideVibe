@@ -50,22 +50,9 @@
 
         const loader = new THREE.GLTFLoader();
         let bikeModel;
-        loader.load('./models/bike/scene.gltf', (gltf) => {
-            bikeModel = gltf.scene;
-            scene.add(bikeModel);
-            bikeModel.scale.set(2, 2, 2);
-            const halfGrid = gridSize / 2;
-            bikeModel.position.set(
-                Math.random() * gridSize - halfGrid, // -50 to 50
-                0,
-                Math.random() * gridSize - halfGrid  // -50 to 50
-            );
-            bikeModel.rotation.y = 0;
-        });
-
         let trailMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
         const trailHeight = 2;
-        const trailWidth = 1;
+        const trailWidth = 2;
         const trailDepth = 0.15;
         let trailSegments = [];
         let lastSpawnTime = 0;
@@ -124,21 +111,23 @@
         };
 
         function addOtherPlayer(player) {
-            loader.load('./models/bike/scene.gltf', (gltf) => {
-                const otherBike = gltf.scene;
-                otherBike.scale.set(2, 2, 2);
-                scene.add(otherBike);
-                otherPlayers[player.id] = {
-                    model: otherBike,
-                    trailSegments: [],
-                    trailMaterial: new THREE.MeshPhongMaterial({ 
-                        color: player.color, 
-                        emissive: player.color, 
-                        emissiveIntensity: 0.8 
-                    })
-                };
-                updateOtherPlayer(player); // Set initial position
-            });
+            if (!otherPlayers[player.id]) {
+                loader.load('./models/bike/scene.gltf', (gltf) => {
+                    const otherBike = gltf.scene;
+                    otherBike.scale.set(2, 2, 2);
+                    scene.add(otherBike);
+                    otherPlayers[player.id] = {
+                        model: otherBike,
+                        trailSegments: [],
+                        trailMaterial: new THREE.MeshPhongMaterial({ 
+                            color: player.color, 
+                            emissive: player.color, 
+                            emissiveIntensity: 0.8 
+                        })
+                    };
+                    updateOtherPlayer(player);
+                });
+            }
         }
 
         function updateOtherPlayer(player) {
@@ -148,6 +137,9 @@
                 other.model.rotation.y = player.rotation;
                 other.trailMaterial.color.setHex(player.color);
                 other.trailMaterial.emissive.setHex(player.color);
+                other.model.traverse(child => {
+                    if (child.isMesh && child.material) child.material.color.setHex(player.color);
+                });
 
                 if (player.newTrail) {
                     const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
@@ -204,10 +196,37 @@
         const startButton = document.getElementById('startButton');
         const colorButton = document.getElementById('colorButton');
         startButton.addEventListener('click', () => {
-            gameStarted = true;
-            startButton.style.display = 'none';
-            colorButton.style.display = 'none';
-            animate(0);
+            if (!gameStarted) {
+                gameStarted = true;
+                startButton.style.display = 'none';
+                colorButton.style.display = 'none';
+                
+                loader.load('./models/bike/scene.gltf', (gltf) => {
+                    bikeModel = gltf.scene;
+                    scene.add(bikeModel);
+                    bikeModel.scale.set(2, 2, 2);
+                    const halfGrid = gridSize / 2;
+                    bikeModel.position.set(
+                        Math.random() * gridSize - halfGrid,
+                        0,
+                        Math.random() * gridSize - halfGrid
+                    );
+                    bikeModel.rotation.y = 0;
+                    bikeModel.traverse(child => {
+                        if (child.isMesh && child.material) child.material.color.setHex(colors[currentColorIndex].hex);
+                    });
+                    trailMaterial.color.setHex(colors[currentColorIndex].hex);
+                    trailMaterial.emissive.setHex(colors[currentColorIndex].hex);
+                    socket.send(JSON.stringify({
+                        type: 'update',
+                        position: bikeModel.position,
+                        rotation: bikeModel.rotation.y,
+                        color: colors[currentColorIndex].hex
+                    }));
+                });
+
+                animate(0);
+            }
         });
 
         function updateColorButton() {
@@ -230,6 +249,12 @@
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(newColor.hex);
                 });
+                socket.send(JSON.stringify({
+                    type: 'update',
+                    position: bikeModel.position,
+                    rotation: bikeModel.rotation.y,
+                    color: newColor.hex
+                }));
             }
             updateColorButton();
         });
@@ -292,8 +317,8 @@
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
                     newTrail: trailSegments.length > 0 ? trailSegments[trailSegments.length - 1].mesh.position : null,
-                    spawnTime: trailSegments.length > 0 ? trailSegments[trailSegments.length - 1].spawnTime : null,
-                    color: colors[currentColorIndex].hex
+                    spawnTime: trailSegments.length > 0 ? trailSegments[trailSegments.length - 1].spawnTime : null
+                    // No color here—only send when it changes
                 }));
 
                 const offset = new THREE.Vector3(0, 5, -10);
