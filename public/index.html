@@ -89,12 +89,16 @@
         let turnLeftPressed = false;
         let turnRightPressed = false;
         let boostPressed = false;
+        let jumpPressed = false;
+        let isOnUpperFloor = false;
+
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
                 if (event.key === 'ArrowUp') boostPressed = true;
+                if (event.key === ' ') jumpPressed = true;
             }
         });
         document.addEventListener('keyup', (event) => {
@@ -102,6 +106,7 @@
             if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = false;
             if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = false;
             if (event.key === 'ArrowUp') boostPressed = false;
+            if (event.key === ' ') jumpPressed = false;
         });
 
         const baseSpeed = 6;
@@ -257,7 +262,8 @@
             turnLeftPressed = false;
             turnRightPressed = false;
             boostPressed = false;
-            boostParticles.visible = false;
+			boostParticles.visible = false;
+            jumpPressed = false;
         }
 
         window.addEventListener('resize', () => {
@@ -442,6 +448,17 @@
 
                 bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
                 bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
+
+                if (jumpPressed) {
+                    if (bikeModel.position.y === 0) {
+                        bikeModel.position.y = 7.9;
+                        bikeModel.rotation.x = Math.PI;
+                    } else {
+                        bikeModel.position.y = 0;
+                        bikeModel.rotation.x = 0;
+                    }
+                    jumpPressed = false;
+                }
 
                 if (turnLeftPressed) {
                     bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2);
