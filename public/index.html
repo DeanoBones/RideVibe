@@ -446,10 +446,8 @@
                     boostParticles.visible = false;
                 }
 
-                // Adjust movement direction based on flip
-                const direction = bikeModel.rotation.x === Math.PI ? -1 : 1;
-                bikeModel.position.z += direction * currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
-                bikeModel.position.x += direction * currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
+                bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
+                bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
 
                 if (jumpPressed) {
                     if (bikeModel.position.y === 0) {
@@ -516,7 +514,7 @@
                 const offset = new THREE.Vector3(0, 5, -10);
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
-                camera.rotation.x = bikeModel.rotation.x;
+                camera.rotation.x = bikeModel.rotation.x; // Sync camera flip with bike
                 camera.lookAt(bikeModel.position);
             }
 
