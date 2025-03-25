@@ -57,7 +57,7 @@
         let lastTrailPosition = null;
         const trailSpawnDistance = 1;
         const trailLifetime = 10000; // 10 seconds
-        const trailOffsetDistance = 4; // Increased to 4 units behind
+        const trailOffsetDistance = 4;
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -99,64 +99,37 @@
         let boostStartTime = 0;
         const boostDuration = 2000;
         const boostCooldown = 10000;
+        const deathEffectDuration = 1000; // 1 second for death effect
         let lastBoostTime = -boostCooldown;
         let gameOver = false;
         let gameStarted = false;
         let lastTime = 0;
         let animationFrameId = null;
 
-        // Particle system for boost effect
+        // Particle system for boost and death effects
         let boostParticles;
-        const boostParticleCount = 50;
-        const boostParticlesGeom = new THREE.BufferGeometry();
-        const boostParticlePositions = new Float32Array(boostParticleCount * 3);
-        const boostParticleVelocities = new Float32Array(boostParticleCount * 3);
-        for (let i = 0; i < boostParticleCount; i++) {
-            boostParticlePositions[i * 3] = 0;
-            boostParticlePositions[i * 3 + 1] = 0;
-            boostParticlePositions[i * 3 + 2] = 0;
-            boostParticleVelocities[i * 3] = (Math.random() - 0.5) * 5;
-            boostParticleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 5;
-            boostParticleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 5;
+        const particleCount = 50;
+        const particles = new THREE.BufferGeometry();
+        const particlePositions = new Float32Array(particleCount * 3);
+        const particleVelocities = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            particlePositions[i * 3] = 0;
+            particlePositions[i * 3 + 1] = 0;
+            particlePositions[i * 3 + 2] = 0;
+            particleVelocities[i * 3] = (Math.random() - 0.5) * 5;
+            particleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 5;
+            particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 5;
         }
-        boostParticlesGeom.setAttribute('position', new THREE.BufferAttribute(boostParticlePositions, 3));
-        const boostParticleMaterial = new THREE.PointsMaterial({
+        particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        const particleMaterial = new THREE.PointsMaterial({
             color: 0xffff00,
             size: 0.2,
             transparent: true,
             opacity: 0.8
         });
-        boostParticles = new THREE.Points(boostParticlesGeom, boostParticleMaterial);
+        boostParticles = new THREE.Points(particles, particleMaterial);
         boostParticles.visible = false;
         scene.add(boostParticles);
-
-        // Particle system for death effect
-        let deathParticles;
-        const deathParticleCount = 50;
-        const deathParticlesGeom = new THREE.BufferGeometry();
-        const deathParticlePositions = new Float32Array(deathParticleCount * 3);
-        const deathParticleVelocities = new Float32Array(deathParticleCount * 3);
-        for (let i = 0; i < deathParticleCount; i++) {
-            deathParticlePositions[i * 3] = 0;
-            deathParticlePositions[i * 3 + 1] = 0;
-            deathParticlePositions[i * 3 + 2] = 0;
-            deathParticleVelocities[i * 3] = (Math.random() - 0.5) * 6; // Slightly faster spread
-            deathParticleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 6;
-            deathParticleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 6;
-        }
-        deathParticlesGeom.setAttribute('position', new THREE.BufferAttribute(deathParticlePositions, 3));
-        const deathParticleMaterial = new THREE.PointsMaterial({
-            color: 0xff0000, // Red for death
-            size: 0.4, // Larger particles
-            transparent: true,
-            opacity: 0.8
-        });
-        deathParticles = new THREE.Points(deathParticlesGeom, deathParticleMaterial);
-        deathParticles.visible = false;
-        scene.add(deathParticles);
-
-        let deathEffectStartTime = 0;
-        const deathEffectDuration = 1000; // 1 second
 
         const socket = new WebSocket(`wss://${window.location.host}`);
         let myId;
@@ -275,7 +248,6 @@
             turnRightPressed = false;
             boostPressed = false;
             boostParticles.visible = false;
-            deathParticles.visible = false; // Reset death particles
         }
 
         window.addEventListener('resize', () => {
@@ -387,75 +359,58 @@
             return snappedDegrees * (Math.PI / 180);
         }
 
-        function updateBoostParticles(timestamp) {
+        function updateBoostParticles(timestamp, isDeath = false) {
             if (!boostParticles.visible) return;
 
             const positions = boostParticles.geometry.attributes.position.array;
-            const velocities = boostParticleVelocities;
+            const velocities = particleVelocities;
+            const duration = isDeath ? deathEffectDuration : boostDuration;
 
-            for (let i = 0; i < boostParticleCount; i++) {
+            for (let i = 0; i < particleCount; i++) {
                 positions[i * 3] += velocities[i * 3] * 0.05;
                 positions[i * 3 + 1] += velocities[i * 3 + 1] * 0.05;
                 positions[i * 3 + 2] += velocities[i * 3 + 2] * 0.05;
+            }
+            boostParticles.geometry.attributes.position.needsUpdate = true;
 
-                const age = timestamp - boostStartTime;
-                if (age > boostDuration) {
-                    boostParticles.visible = false;
+            const age = timestamp - boostStartTime;
+            if (age > duration) {
+                boostParticles.visible = false;
+            }
+        }
+
+        function activateBoostParticles(isDeath = false) {
+            boostParticles.visible = true;
+            boostStartTime = performance.now();
+            const positions = boostParticles.geometry.attributes.position.array;
+            let bikePos;
+
+            if (isDeath) {
+                bikePos = bikeModel.position.clone(); // Center on bike for death
+                particleMaterial.color.setHex(0xff0000); // Red for death
+                particleMaterial.size = 0.4; // Larger for death
+                for (let i = 0; i < particleCount; i++) {
+                    positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 1.5; // Wider spread
+                    positions[i * 3 + 1] = bikePos.y + (Math.random() - 0.5) * 1.5;
+                    positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 1.5;
+                }
+            } else {
+                const offset = new THREE.Vector3(
+                    -Math.sin(bikeModel.rotation.y) * 2,
+                    0.5,
+                    -Math.cos(bikeModel.rotation.y) * 2
+                );
+                bikePos = bikeModel.position.clone().add(offset); // Behind bike for boost
+                particleMaterial.color.setHex(colors[currentColorIndex].hex); // Match bike color
+                particleMaterial.size = 0.2; // Smaller for boost
+                for (let i = 0; i < particleCount; i++) {
+                    positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 0.5; // Tighter spread
+                    positions[i * 3 + 1] = bikePos.y + (Math.random() - 0.5) * 0.5;
+                    positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 0.5;
                 }
             }
+
             boostParticles.geometry.attributes.position.needsUpdate = true;
-        }
-
-        function activateBoostParticles() {
-            boostParticles.visible = true;
-            const positions = boostParticles.geometry.attributes.position.array;
-            const offset = new THREE.Vector3(
-                -Math.sin(bikeModel.rotation.y) * 2,
-                0.5,
-                -Math.cos(bikeModel.rotation.y) * 2
-            );
-            const bikePos = bikeModel.position.clone().add(offset);
-
-            for (let i = 0; i < boostParticleCount; i++) {
-                positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 0.5;
-                positions[i * 3 + 1] = bikePos.y + (Math.random() - 0.5) * 0.5;
-                positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 0.5;
-            }
-            boostParticles.geometry.attributes.position.needsUpdate = true;
-            boostParticleMaterial.color.setHex(colors[currentColorIndex].hex);
-        }
-
-        function updateDeathParticles(timestamp) {
-            if (!deathParticles.visible) return;
-
-            const positions = deathParticles.geometry.attributes.position.array;
-            const velocities = deathParticleVelocities;
-
-            for (let i = 0; i < deathParticleCount; i++) {
-                positions[i * 3] += velocities[i * 3] * 0.05;
-                positions[i * 3 + 1] += velocities[i * 3 + 1] * 0.05;
-                positions[i * 3 + 2] += velocities[i * 3 + 2] * 0.05;
-            }
-            deathParticles.geometry.attributes.position.needsUpdate = true;
-
-            const age = timestamp - deathEffectStartTime;
-            if (age > deathEffectDuration) {
-                deathParticles.visible = false;
-            }
-        }
-
-        function activateDeathParticles() {
-            deathParticles.visible = true;
-            deathEffectStartTime = performance.now();
-            const positions = deathParticles.geometry.attributes.position.array;
-            const bikePos = bikeModel.position.clone();
-
-            for (let i = 0; i < deathParticleCount; i++) {
-                positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 1.5; // Wider spread
-                positions[i * 3 + 1] = bikePos.y + (Math.random() - 0.5) * 1.5;
-                positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 1.5;
-            }
-            deathParticles.geometry.attributes.position.needsUpdate = true;
         }
 
         function shouldSpawnTrail(currentPos) {
@@ -482,7 +437,7 @@
                     currentSpeed = boostSpeed;
                     boostStartTime = timestamp;
                     lastBoostTime = timestamp;
-                    activateBoostParticles();
+                    activateBoostParticles(false); // Boost effect
                     boostPressed = false;
                 }
                 
@@ -516,11 +471,11 @@
                 if (checkBoundaries(bikeModel.position) || checkCollision(bikeModel.position)) {
                     gameOver = true;
                     console.log("Game Over!");
-                    activateDeathParticles();
+                    activateBoostParticles(true); // Death effect
                     restartButton.style.display = 'block';
                 }
 
-                // Trail spawning with flipped and increased offset
+                // Trail spawning
                 let newTrail = null;
                 if (shouldSpawnTrail(bikeModel.position)) {
                     const offset = new THREE.Vector3(
@@ -543,19 +498,14 @@
                     spawnTime: timestamp
                 }));
 
-                if (currentSpeed === boostSpeed) {
-                    updateBoostParticles(timestamp);
+                if (boostParticles.visible) {
+                    updateBoostParticles(timestamp, gameOver); // Pass gameOver to determine duration
                 }
 
                 const offset = new THREE.Vector3(0, 5, -10);
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
                 camera.lookAt(bikeModel.position);
-            }
-
-            // Update death particles even after game over
-            if (deathParticles.visible) {
-                updateDeathParticles(timestamp);
             }
 
             renderer.render(scene, camera);
