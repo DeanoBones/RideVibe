@@ -49,6 +49,13 @@
 
         const loader = new THREE.GLTFLoader();
         let bikeModel;
+        let trailMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
+        let trailSegments = [];
+        const trailHeight = 2;
+        const trailWidth = 2;
+        const trailDepth = 0.15;
+        let lastTrailPosition = null; // To throttle trail spawning
+        const trailSpawnDistance = 1; // Minimum distance between trail segments
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -68,7 +75,7 @@
         const keys = {};
         let turnLeftPressed = false;
         let turnRightPressed = false;
-        let boostPressed = false; // Track boost state
+        let boostPressed = false;
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
@@ -103,22 +110,22 @@
         const particlePositions = new Float32Array(particleCount * 3);
         const particleVelocities = new Float32Array(particleCount * 3);
         for (let i = 0; i < particleCount; i++) {
-            particlePositions[i * 3] = 0;     // x
-            particlePositions[i * 3 + 1] = 0; // y
-            particlePositions[i * 3 + 2] = 0; // z
-            particleVelocities[i * 3] = (Math.random() - 0.5) * 5;     // vx
-            particleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 5; // vy
-            particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 5; // vz
+            particlePositions[i * 3] = 0;
+            particlePositions[i * 3 + 1] = 0;
+            particlePositions[i * 3 + 2] = 0;
+            particleVelocities[i * 3] = (Math.random() - 0.5) * 5;
+            particleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 5;
+            particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 5;
         }
         particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
         const particleMaterial = new THREE.PointsMaterial({
-            color: 0xffff00, // Yellow for boost effect, adjust as needed
+            color: 0xffff00,
             size: 0.2,
             transparent: true,
             opacity: 0.8
         });
         boostParticles = new THREE.Points(particles, particleMaterial);
-        boostParticles.visible = false; // Hidden by default
+        boostParticles.visible = false;
         scene.add(boostParticles);
 
         const socket = new WebSocket(`wss://${window.location.host}`);
@@ -146,6 +153,7 @@
                     break;
                 case 'update':
                     updateOtherPlayer(data);
+                    if (data.newTrail && data.id !== myId) spawnTrailSegment(data.newTrail, data.rotation, data.color);
                     break;
                 case 'removePlayer':
                     removeOtherPlayer(data.id);
@@ -164,7 +172,15 @@
                         if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
                     });
                     scene.add(otherBike);
-                    otherPlayers[player.id] = { model: otherBike };
+                    otherPlayers[player.id] = {
+                        model: otherBike,
+                        trailSegments: [],
+                        trailMaterial: new THREE.MeshPhongMaterial({
+                            color: player.color || 0x00ffff,
+                            emissive: player.color || 0x00ffff,
+                            emissiveIntensity: 0.8
+                        })
+                    };
                 });
             }
         }
@@ -175,6 +191,8 @@
                 other.model.position.set(player.position.x, player.position.y, player.position.z);
                 other.model.rotation.y = player.rotation;
                 if (player.color) {
+                    other.trailMaterial.color.setHex(player.color);
+                    other.trailMaterial.emissive.setHex(player.color);
                     other.model.traverse(child => {
                         if (child.isMesh && child.material) child.material.color.setHex(player.color);
                     });
@@ -182,9 +200,28 @@
             }
         }
 
+        function spawnTrailSegment(position, rotation, color) {
+            const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
+            const material = (color === colors[currentColorIndex].hex && myId) ? trailMaterial : new THREE.MeshPhongMaterial({
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.8
+            });
+            const trailSegment = new THREE.Mesh(trailGeometry, material);
+            trailSegment.position.set(position.x, -0.5 + trailHeight / 2, position.z);
+            trailSegment.rotation.y = rotation + Math.PI / 2; // Align with movement direction
+            scene.add(trailSegment);
+            if (myId && color === colors[currentColorIndex].hex) {
+                trailSegments.push(trailSegment);
+            } else if (otherPlayers[position.id]) {
+                otherPlayers[position.id].trailSegments.push(trailSegment);
+            }
+        }
+
         function removeOtherPlayer(id) {
             if (otherPlayers[id]) {
                 scene.remove(otherPlayers[id].model);
+                otherPlayers[id].trailSegments.forEach(segment => scene.remove(segment));
                 delete otherPlayers[id];
             }
         }
@@ -194,6 +231,9 @@
                 scene.remove(bikeModel);
                 bikeModel = null;
             }
+            trailSegments.forEach(segment => scene.remove(segment));
+            trailSegments = [];
+            lastTrailPosition = null;
             gameOver = false;
             gameStarted = false;
             currentSpeed = baseSpeed;
@@ -210,7 +250,7 @@
             turnLeftPressed = false;
             turnRightPressed = false;
             boostPressed = false;
-            boostParticles.visible = false; // Hide particles on reset
+            boostParticles.visible = false;
         }
 
         window.addEventListener('resize', () => {
@@ -218,6 +258,20 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        function checkCollision(bikePos) {
+            const bikeRadius = 0.5; // Adjust as needed
+            for (let segments of [trailSegments, ...Object.values(otherPlayers).map(p => p.trailSegments)]) {
+                for (let segment of segments) {
+                    const trailPos = segment.position;
+                    const dx = bikePos.x - trailPos.x;
+                    const dz = bikePos.z - trailPos.z;
+                    const distance = Math.sqrt(dx * dx + dz * dz);
+                    if (distance < bikeRadius + trailWidth / 2) return true;
+                }
+            }
+            return false;
+        }
 
         function checkBoundaries(bikePos) {
             const halfGrid = gridSize / 2;
@@ -254,6 +308,8 @@
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(startColor);
                 });
+                trailMaterial.color.setHex(startColor);
+                trailMaterial.emissive.setHex(startColor);
                 socket.send(JSON.stringify({
                     type: 'start',
                     id: myId,
@@ -279,6 +335,12 @@
             if (gameStarted && bikeModel) {
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(newColor);
+                });
+                trailMaterial.color.setHex(newColor);
+                trailMaterial.emissive.setHex(newColor);
+                trailSegments.forEach(segment => {
+                    segment.material.color.setHex(newColor);
+                    segment.material.emissive.setHex(newColor);
                 });
                 socket.send(JSON.stringify({
                     type: 'update',
@@ -309,11 +371,10 @@
             const velocities = particleVelocities;
 
             for (let i = 0; i < particleCount; i++) {
-                positions[i * 3] += velocities[i * 3] * 0.05;     // x
-                positions[i * 3 + 1] += velocities[i * 3 + 1] * 0.05; // y
-                positions[i * 3 + 2] += velocities[i * 3 + 2] * 0.05; // z
+                positions[i * 3] += velocities[i * 3] * 0.05;
+                positions[i * 3 + 1] += velocities[i * 3 + 1] * 0.05;
+                positions[i * 3 + 2] += velocities[i * 3 + 2] * 0.05;
 
-                // Fade out particles over time
                 const age = timestamp - boostStartTime;
                 if (age > boostDuration) {
                     boostParticles.visible = false;
@@ -326,19 +387,26 @@
             boostParticles.visible = true;
             const positions = boostParticles.geometry.attributes.position.array;
             const offset = new THREE.Vector3(
-                -Math.sin(bikeModel.rotation.y) * 2, // Behind bike
-                0.5,                                // Slightly above ground
-                -Math.cos(bikeModel.rotation.y) * 2  // Behind bike
+                -Math.sin(bikeModel.rotation.y) * 2,
+                0.5,
+                -Math.cos(bikeModel.rotation.y) * 2
             );
             const bikePos = bikeModel.position.clone().add(offset);
 
             for (let i = 0; i < particleCount; i++) {
-                positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 0.5;     // x
-                positions[i * 3 + 1] = bikePos.y + (Math.random() - 0.5) * 0.5; // y
-                positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 0.5; // z
+                positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 0.5;
+                positions[i * 3 + 1] = bikePos.y + (Math.random() - 0.5) * 0.5;
+                positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 0.5;
             }
             boostParticles.geometry.attributes.position.needsUpdate = true;
-            particleMaterial.color.setHex(colors[currentColorIndex].hex); // Match bike color
+            particleMaterial.color.setHex(colors[currentColorIndex].hex);
+        }
+
+        function shouldSpawnTrail(currentPos) {
+            if (!lastTrailPosition) return true;
+            const dx = currentPos.x - lastTrailPosition.x;
+            const dz = currentPos.z - lastTrailPosition.z;
+            return Math.sqrt(dx * dx + dz * dz) >= trailSpawnDistance;
         }
 
         function animate(timestamp) {
@@ -359,7 +427,7 @@
                     boostStartTime = timestamp;
                     lastBoostTime = timestamp;
                     activateBoostParticles();
-                    boostPressed = false; // Reset to allow one boost per press
+                    boostPressed = false;
                 }
                 
                 if (currentSpeed === boostSpeed && timestamp - boostStartTime >= boostDuration) {
@@ -379,20 +447,34 @@
                     turnRightPressed = false;
                 }
 
-                if (checkBoundaries(bikeModel.position)) {
+                if (checkBoundaries(bikeModel.position) || checkCollision(bikeModel.position)) {
                     gameOver = true;
                     console.log("Game Over!");
                     restartButton.style.display = 'block';
+                }
+
+                // Trail spawning with throttling
+                let newTrail = null;
+                if (shouldSpawnTrail(bikeModel.position)) {
+                    const offset = new THREE.Vector3(
+                        -Math.sin(bikeModel.rotation.y) * trailWidth / 2,
+                        0,
+                        -Math.cos(bikeModel.rotation.y) * trailWidth / 2
+                    );
+                    newTrail = bikeModel.position.clone().sub(offset);
+                    spawnTrailSegment(newTrail, bikeModel.rotation.y, colors[currentColorIndex].hex);
+                    lastTrailPosition = newTrail.clone();
                 }
 
                 socket.send(JSON.stringify({
                     type: 'update',
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
-                    speed: currentSpeed
+                    speed: currentSpeed,
+                    newTrail: newTrail,
+                    color: colors[currentColorIndex].hex
                 }));
 
-                // Update boost particles if active
                 if (currentSpeed === boostSpeed) {
                     updateBoostParticles(timestamp);
                 }

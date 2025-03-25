@@ -23,7 +23,6 @@ wss.on('connection', (ws) => {
                 color: data.color,
                 speed: data.speed || 6
             };
-            // Broadcast new player to all existing clients
             wss.clients.forEach(client => {
                 if (client.readyState === WebSocket.OPEN) {
                     client.send(JSON.stringify({ type: 'start', ...players[id] }));
@@ -36,16 +35,16 @@ wss.on('connection', (ws) => {
                     position: data.position,
                     rotation: data.rotation,
                     color: data.color || players[id].color,
-                    speed: data.speed || players[id].speed
+                    speed: data.speed || players[id].speed,
+                    newTrail: data.newTrail
                 };
                 wss.clients.forEach(client => {
-                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                    if (client.readyState === WebSocket.OPEN) {
                         client.send(JSON.stringify({ type: 'update', ...players[id] }));
                     }
                 });
             }
         } else if (data.type === 'getPlayers') {
-            // Send current players to the newly connected client
             const currentPlayers = Object.values(players).filter(p => p.id !== id);
             ws.send(JSON.stringify({ type: 'currentPlayers', players: currentPlayers }));
         }
