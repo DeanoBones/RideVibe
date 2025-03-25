@@ -21,10 +21,11 @@ wss.on('connection', (ws) => {
                 position: data.position,
                 rotation: data.rotation,
                 color: data.color,
-                speed: 6 // Default speed
+                speed: data.speed || 6
             };
+            // Broadcast new player to all existing clients
             wss.clients.forEach(client => {
-                if (client !== ws && client.readyState === WebSocket.OPEN) {
+                if (client.readyState === WebSocket.OPEN) {
                     client.send(JSON.stringify({ type: 'start', ...players[id] }));
                 }
             });
@@ -43,6 +44,10 @@ wss.on('connection', (ws) => {
                     }
                 });
             }
+        } else if (data.type === 'getPlayers') {
+            // Send current players to the newly connected client
+            const currentPlayers = Object.values(players).filter(p => p.id !== id);
+            ws.send(JSON.stringify({ type: 'currentPlayers', players: currentPlayers }));
         }
     });
 

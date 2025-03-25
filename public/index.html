@@ -74,9 +74,9 @@
         const turnSpeed = 1.8;
         let currentSpeed = baseSpeed;
         let boostStartTime = 0;
-        const boostDuration = 2000; // 2 seconds in milliseconds
-        const boostCooldown = 10000; // 10 seconds in milliseconds
-        let lastBoostTime = -boostCooldown; // Allow immediate use at start
+        const boostDuration = 2000;
+        const boostCooldown = 10000;
+        let lastBoostTime = -boostCooldown;
         let gameOver = false;
         let gameStarted = false;
         let lastTime = 0;
@@ -85,12 +85,23 @@
         let myId;
         const otherPlayers = {};
 
-        socket.onopen = () => console.log('Connected to server');
+        socket.onopen = () => {
+            console.log('Connected to server');
+        };
+
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
             switch (data.type) {
                 case 'init':
                     myId = data.id;
+                    // Request current players when we connect
+                    socket.send(JSON.stringify({ type: 'getPlayers' }));
+                    break;
+                case 'currentPlayers':
+                    // Add all existing players when we join
+                    data.players.forEach(player => {
+                        if (player.id !== myId) addOtherPlayer(player);
+                    });
                     break;
                 case 'start':
                     if (data.id !== myId) addOtherPlayer(data);
@@ -105,7 +116,7 @@
         };
 
         function addOtherPlayer(player) {
-            if (!otherPlayers[player.id]) {
+            if (!otherPlayers[player.id] && player.id !== myId) {
                 loader.load('./models/bike/scene.gltf', (gltf) => {
                     const otherBike = gltf.scene;
                     otherBike.scale.set(2, 2, 2);
@@ -195,7 +206,8 @@
                     id: myId,
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
-                    color: startColor
+                    color: startColor,
+                    speed: currentSpeed
                 }));
                 animate(0);
             });
@@ -219,7 +231,8 @@
                     type: 'update',
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
-                    color: newColor
+                    color: newColor,
+                    speed: currentSpeed
                 }));
             }
             updateColorButton();
@@ -242,14 +255,12 @@
                 const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60;
                 lastTime = timestamp;
 
-                // Handle speed boost
                 if (keys['w'] && timestamp - lastBoostTime >= boostCooldown && currentSpeed === baseSpeed) {
                     currentSpeed = boostSpeed;
                     boostStartTime = timestamp;
                     lastBoostTime = timestamp;
                 }
                 
-                // End speed boost after duration
                 if (currentSpeed === boostSpeed && timestamp - boostStartTime >= boostDuration) {
                     currentSpeed = baseSpeed;
                 }
@@ -270,7 +281,7 @@
                     type: 'update',
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
-                    speed: currentSpeed // Add speed to update message
+                    speed: currentSpeed
                 }));
 
                 const offset = new THREE.Vector3(0, 5, -10);
