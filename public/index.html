@@ -37,15 +37,26 @@
 
         const gridSize = 100;
         const divisions = 50;
-        const gridHelper = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
-        gridHelper.position.y = -1;
-        scene.add(gridHelper);
+
+        // Lower floor
+        const gridHelperLower = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
+        gridHelperLower.position.y = -1;
+        scene.add(gridHelperLower);
         const planeGeometry = new THREE.PlaneGeometry(gridSize, gridSize);
         const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x001111, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
-        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-        plane.rotation.x = Math.PI / 2;
-        plane.position.y = -1.1;
-        scene.add(plane);
+        const planeLower = new THREE.Mesh(planeGeometry, planeMaterial);
+        planeLower.rotation.x = Math.PI / 2;
+        planeLower.position.y = -1.1;
+        scene.add(planeLower);
+
+        // Upper floor
+        const gridHelperUpper = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
+        gridHelperUpper.position.y = 8;
+        scene.add(gridHelperUpper);
+        const planeUpper = new THREE.Mesh(planeGeometry.clone(), planeMaterial.clone());
+        planeUpper.rotation.x = Math.PI / 2;
+        planeUpper.position.y = 7.9;
+        scene.add(planeUpper);
 
         const loader = new THREE.GLTFLoader();
         let bikeModel;
@@ -56,8 +67,8 @@
         const trailDepth = 0.15;
         let lastTrailPosition = null;
         const trailSpawnDistance = 1;
-        const trailLifetime = 10000; // 10 seconds
-        const trailOffsetDistance = 1; // Increased to 4 units behind
+        const trailLifetime = 10000;
+        const trailOffsetDistance = 1;
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -441,7 +452,6 @@
                     turnRightPressed = false;
                 }
 
-                // Clean up expired trail segments
                 trailSegments = trailSegments.filter(segment => {
                     const age = timestamp - segment.spawnTime;
                     if (age > trailLifetime) {
@@ -457,11 +467,10 @@
                     restartButton.style.display = 'block';
                 }
 
-                // Trail spawning with flipped and increased offset
                 let newTrail = null;
                 if (shouldSpawnTrail(bikeModel.position)) {
                     const offset = new THREE.Vector3(
-                        Math.sin(bikeModel.rotation.y) * trailOffsetDistance, // Flipped to spawn behind
+                        Math.sin(bikeModel.rotation.y) * trailOffsetDistance,
                         0,
                         Math.cos(bikeModel.rotation.y) * trailOffsetDistance
                     );
