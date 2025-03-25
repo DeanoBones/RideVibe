@@ -49,7 +49,7 @@
         planeLower.position.y = -1.1;
         scene.add(planeLower);
 
-        // Upper floor (roof)
+        // Upper floor
         const gridHelperUpper = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
         gridHelperUpper.position.y = 8;
         scene.add(gridHelperUpper);
@@ -89,16 +89,12 @@
         let turnLeftPressed = false;
         let turnRightPressed = false;
         let boostPressed = false;
-        let jumpPressed = false;
-        let isOnUpperFloor = false;
-
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
                 if (event.key === 'ArrowUp') boostPressed = true;
-                if (event.key === ' ') jumpPressed = true;
             }
         });
         document.addEventListener('keyup', (event) => {
@@ -106,7 +102,6 @@
             if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = false;
             if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = false;
             if (event.key === 'ArrowUp') boostPressed = false;
-            if (event.key === ' ') jumpPressed = false;
         });
 
         const baseSpeed = 6;
@@ -171,7 +166,7 @@
                     break;
                 case 'update':
                     updateOtherPlayer(data);
-                    if (data.newTrail && data.id !== myId) spawnTrailSegment(data.newTrail, data.rotation, data.color, data.spawnTime, data.isOnUpperFloor);
+                    if (data.newTrail && data.id !== myId) spawnTrailSegment(data.newTrail, data.rotation, data.color, data.spawnTime);
                     break;
                 case 'removePlayer':
                     removeOtherPlayer(data.id);
@@ -186,7 +181,6 @@
                     otherBike.scale.set(2, 2, 2);
                     otherBike.position.set(player.position.x, player.position.y, player.position.z);
                     otherBike.rotation.y = player.rotation;
-                    otherBike.rotation.x = player.isOnUpperFloor ? Math.PI : 0;
                     otherBike.traverse(child => {
                         if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
                     });
@@ -197,8 +191,7 @@
                             color: player.color || 0x00ffff,
                             emissive: player.color || 0x00ffff,
                             emissiveIntensity: 0.8
-                        }),
-                        isOnUpperFloor: player.isOnUpperFloor || false
+                        })
                     };
                 });
             }
@@ -209,8 +202,6 @@
                 const other = otherPlayers[player.id];
                 other.model.position.set(player.position.x, player.position.y, player.position.z);
                 other.model.rotation.y = player.rotation;
-                other.model.rotation.x = player.isOnUpperFloor ? Math.PI : 0;
-                other.isOnUpperFloor = player.isOnUpperFloor;
                 if (player.color) {
                     other.trailMaterial.color.setHex(player.color);
                     other.trailMaterial.emissive.setHex(player.color);
@@ -221,7 +212,7 @@
             }
         }
 
-        function spawnTrailSegment(position, rotation, color, spawnTime, isUpper) {
+        function spawnTrailSegment(position, rotation, color, spawnTime) {
             const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
             const material = (color === colors[currentColorIndex].hex && myId) ? trailMaterial : new THREE.MeshPhongMaterial({
                 color: color,
@@ -229,13 +220,8 @@
                 emissiveIntensity: 0.8
             });
             const trailSegment = new THREE.Mesh(trailGeometry, material);
-            trailSegment.position.set(
-                position.x,
-                isUpper ? (7.9 - 0.5 - trailHeight / 2) : (-0.5 + trailHeight / 2),
-                position.z
-            );
+            trailSegment.position.set(position.x, -0.5 + trailHeight / 2, position.z);
             trailSegment.rotation.y = rotation + Math.PI / 2;
-            if (isUpper) trailSegment.rotation.x = Math.PI;
             scene.add(trailSegment);
             trailSegments.push({ mesh: trailSegment, spawnTime: spawnTime || performance.now() });
         }
@@ -260,7 +246,6 @@
             currentSpeed = baseSpeed;
             lastBoostTime = -boostCooldown;
             lastTime = 0;
-            isOnUpperFloor = false;
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
@@ -272,7 +257,6 @@
             turnLeftPressed = false;
             turnRightPressed = false;
             boostPressed = false;
-            jumpPressed = false;
             boostParticles.visible = false;
         }
 
@@ -325,7 +309,6 @@
                     Math.random() * gridSize - halfGrid
                 );
                 bikeModel.rotation.y = 0;
-                bikeModel.rotation.x = 0;
                 const startColor = colors[currentColorIndex].hex;
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(startColor);
@@ -338,8 +321,7 @@
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
                     color: startColor,
-                    speed: currentSpeed,
-                    isOnUpperFloor: isOnUpperFloor
+                    speed: currentSpeed
                 }));
                 animate(0);
             });
@@ -370,8 +352,7 @@
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
                     color: newColor,
-                    speed: currentSpeed,
-                    isOnUpperFloor: isOnUpperFloor
+                    speed: currentSpeed
                 }));
             }
             updateColorButton();
@@ -396,7 +377,7 @@
 
             for (let i = 0; i < particleCount; i++) {
                 positions[i * 3] += velocities[i * 3] * 0.05;
-                positions[i * 3 + 1] += velocities[i * 3 + 1] * 0.05 * (isOnUpperFloor ? -1 : 1);
+                positions[i * 3 + 1] += velocities[i * 3 + 1] * 0.05;
                 positions[i * 3 + 2] += velocities[i * 3 + 2] * 0.05;
 
                 const age = timestamp - boostStartTime;
@@ -412,7 +393,7 @@
             const positions = boostParticles.geometry.attributes.position.array;
             const offset = new THREE.Vector3(
                 -Math.sin(bikeModel.rotation.y) * 2,
-                isOnUpperFloor ? -0.5 : 0.5,
+                0.5,
                 -Math.cos(bikeModel.rotation.y) * 2
             );
             const bikePos = bikeModel.position.clone().add(offset);
@@ -462,13 +443,6 @@
                 bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
                 bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
 
-                if (jumpPressed) {
-                    isOnUpperFloor = !isOnUpperFloor;
-                    bikeModel.position.y = isOnUpperFloor ? 7.9 : 0;
-                    bikeModel.rotation.x = isOnUpperFloor ? Math.PI : 0;
-                    jumpPressed = false;
-                }
-
                 if (turnLeftPressed) {
                     bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2);
                     turnLeftPressed = false;
@@ -501,7 +475,7 @@
                         Math.cos(bikeModel.rotation.y) * trailOffsetDistance
                     );
                     newTrail = bikeModel.position.clone().sub(offset);
-                    spawnTrailSegment(newTrail, bikeModel.rotation.y, colors[currentColorIndex].hex, timestamp, isOnUpperFloor);
+                    spawnTrailSegment(newTrail, bikeModel.rotation.y, colors[currentColorIndex].hex, timestamp);
                     lastTrailPosition = newTrail.clone();
                 }
 
@@ -512,8 +486,7 @@
                     speed: currentSpeed,
                     newTrail: newTrail,
                     color: colors[currentColorIndex].hex,
-                    spawnTime: timestamp,
-                    isOnUpperFloor: isOnUpperFloor
+                    spawnTime: timestamp
                 }));
 
                 if (currentSpeed === boostSpeed) {
