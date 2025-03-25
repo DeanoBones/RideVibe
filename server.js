@@ -20,7 +20,8 @@ wss.on('connection', (ws) => {
                 id: data.id,
                 position: data.position,
                 rotation: data.rotation,
-                color: data.color
+                color: data.color,
+                speed: 6 // Default speed
             };
             wss.clients.forEach(client => {
                 if (client !== ws && client.readyState === WebSocket.OPEN) {
@@ -33,7 +34,8 @@ wss.on('connection', (ws) => {
                     id: data.id || id,
                     position: data.position,
                     rotation: data.rotation,
-                    color: data.color || players[id].color
+                    color: data.color || players[id].color,
+                    speed: data.speed || players[id].speed
                 };
                 wss.clients.forEach(client => {
                     if (client !== ws && client.readyState === WebSocket.OPEN) {

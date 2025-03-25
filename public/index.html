@@ -69,8 +69,14 @@
         document.addEventListener('keydown', (event) => keys[event.key] = true);
         document.addEventListener('keyup', (event) => keys[event.key] = false);
 
-        const speed = 6;
+        const baseSpeed = 6;
+        const boostSpeed = 12;
         const turnSpeed = 1.8;
+        let currentSpeed = baseSpeed;
+        let boostStartTime = 0;
+        const boostDuration = 2000; // 2 seconds in milliseconds
+        const boostCooldown = 10000; // 10 seconds in milliseconds
+        let lastBoostTime = -boostCooldown; // Allow immediate use at start
         let gameOver = false;
         let gameStarted = false;
         let lastTime = 0;
@@ -139,6 +145,8 @@
             bikeModel = null;
             gameOver = false;
             gameStarted = false;
+            currentSpeed = baseSpeed;
+            lastBoostTime = -boostCooldown;
         }
 
         window.addEventListener('resize', () => {
@@ -234,8 +242,20 @@
                 const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60;
                 lastTime = timestamp;
 
-                bikeModel.position.z += speed * Math.cos(bikeModel.rotation.y) * deltaTime;
-                bikeModel.position.x += speed * Math.sin(bikeModel.rotation.y) * deltaTime;
+                // Handle speed boost
+                if (keys['w'] && timestamp - lastBoostTime >= boostCooldown && currentSpeed === baseSpeed) {
+                    currentSpeed = boostSpeed;
+                    boostStartTime = timestamp;
+                    lastBoostTime = timestamp;
+                }
+                
+                // End speed boost after duration
+                if (currentSpeed === boostSpeed && timestamp - boostStartTime >= boostDuration) {
+                    currentSpeed = baseSpeed;
+                }
+
+                bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
+                bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
 
                 if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed * deltaTime;
                 if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed * deltaTime;
@@ -249,7 +269,8 @@
                 socket.send(JSON.stringify({
                     type: 'update',
                     position: bikeModel.position,
-                    rotation: bikeModel.rotation.y
+                    rotation: bikeModel.rotation.y,
+                    speed: currentSpeed // Add speed to update message
                 }));
 
                 const offset = new THREE.Vector3(0, 5, -10);
