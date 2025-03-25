@@ -262,7 +262,7 @@
             turnLeftPressed = false;
             turnRightPressed = false;
             boostPressed = false;
-			boostParticles.visible = false;
+            boostParticles.visible = false;
             jumpPressed = false;
         }
 
@@ -510,7 +510,12 @@
                     updateBoostParticles(timestamp);
                 }
 
-                const offset = new THREE.Vector3(0, 5, -10);
+                // Adjusted camera offset based on bike orientation
+                const offset = new THREE.Vector3(
+                    0,
+                    bikeModel.rotation.x === Math.PI ? -5 : 5, // Below when upside down, above when right side up
+                    bikeModel.rotation.x === Math.PI ? 10 : -10 // In front when upside down, behind when right side up
+                );
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
                 camera.lookAt(bikeModel.position);
