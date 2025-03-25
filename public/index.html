@@ -49,14 +49,6 @@
 
         const loader = new THREE.GLTFLoader();
         let bikeModel;
-        let trailMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
-        const trailHeight = 2;
-        const trailWidth = 2;
-        const trailDepth = 0.15;
-        let trailSegments = [];
-        let lastSpawnTime = 0;
-        const spawnInterval = 100;
-        const cubeLifetime = 10000;
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -117,15 +109,7 @@
                         if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
                     });
                     scene.add(otherBike);
-                    otherPlayers[player.id] = {
-                        model: otherBike,
-                        trailSegments: [],
-                        trailMaterial: new THREE.MeshPhongMaterial({ 
-                            color: player.color || 0x00ffff, 
-                            emissive: player.color || 0x00ffff, 
-                            emissiveIntensity: 0.8 
-                        })
-                    };
+                    otherPlayers[player.id] = { model: otherBike };
                 });
             }
         }
@@ -136,46 +120,25 @@
                 other.model.position.set(player.position.x, player.position.y, player.position.z);
                 other.model.rotation.y = player.rotation;
                 if (player.color) {
-                    other.trailMaterial.color.setHex(player.color);
-                    other.trailMaterial.emissive.setHex(player.color);
                     other.model.traverse(child => {
                         if (child.isMesh && child.material) child.material.color.setHex(player.color);
                     });
                 }
-                if (player.newTrail) {
-                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-                    const trailSegment = new THREE.Mesh(trailGeometry, other.trailMaterial);
-                    trailSegment.position.set(player.newTrail.x, player.newTrail.y, player.newTrail.z);
-                    trailSegment.rotation.y = player.rotation + Math.PI / 2;
-                    scene.add(trailSegment);
-                    other.trailSegments.push({ mesh: trailSegment, spawnTime: player.spawnTime });
-                }
-                other.trailSegments = other.trailSegments.filter(segment => {
-                    if (performance.now() - segment.spawnTime > cubeLifetime) {
-                        scene.remove(segment.mesh);
-                        return false;
-                    }
-                    return true;
-                });
             }
         }
 
         function removeOtherPlayer(id) {
             if (otherPlayers[id]) {
                 scene.remove(otherPlayers[id].model);
-                otherPlayers[id].trailSegments.forEach(segment => scene.remove(segment.mesh));
                 delete otherPlayers[id];
             }
         }
 
         function resetGame() {
             if (bikeModel) scene.remove(bikeModel);
-            trailSegments.forEach(segment => scene.remove(segment.mesh));
-            trailSegments = [];
             bikeModel = null;
             gameOver = false;
             gameStarted = false;
-            lastSpawnTime = 0;
         }
 
         window.addEventListener('resize', () => {
@@ -183,20 +146,6 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        function checkCollision(bikePos) {
-            const bikeRadius = 0.1;
-            for (let segments of [trailSegments, ...Object.values(otherPlayers).map(p => p.trailSegments)]) {
-                for (let segment of segments) {
-                    const trailPos = segment.mesh.position;
-                    const dx = bikePos.x - trailPos.x;
-                    const dz = bikePos.z - trailPos.z;
-                    const distance = Math.sqrt(dx * dx + dz * dz);
-                    if (distance < bikeRadius + trailWidth / 2) return true;
-                }
-            }
-            return false;
-        }
 
         function checkBoundaries(bikePos) {
             const halfGrid = gridSize / 2;
@@ -233,8 +182,6 @@
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(startColor);
                 });
-                trailMaterial.color.setHex(startColor);
-                trailMaterial.emissive.setHex(startColor);
                 socket.send(JSON.stringify({
                     type: 'start',
                     id: myId,
@@ -257,12 +204,6 @@
             currentColorIndex = (currentColorIndex + 1) % colors.length;
             const newColor = colors[currentColorIndex].hex;
             if (gameStarted && bikeModel) {
-                trailMaterial.color.setHex(newColor);
-                trailMaterial.emissive.setHex(newColor);
-                trailSegments.forEach(segment => {
-                    segment.mesh.material.color.setHex(newColor);
-                    segment.mesh.material.emissive.setHex(newColor);
-                });
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(newColor);
                 });
@@ -299,32 +240,7 @@
                 if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed * deltaTime;
                 if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed * deltaTime;
 
-                if (timestamp - lastSpawnTime >= spawnInterval) {
-                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-                    const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                    const offset = new THREE.Vector3(
-                        speed * Math.sin(bikeModel.rotation.y),
-                        0,
-                        speed * Math.cos(bikeModel.rotation.y)
-                    ).multiplyScalar(0.5);
-                    trailSegment.position.copy(bikeModel.position).sub(offset);
-                    trailSegment.position.y = -0.5 + trailHeight / 2;
-                    trailSegment.rotation.y = bikeModel.rotation.y + Math.PI / 2;
-                    scene.add(trailSegment);
-                    trailSegments.push({ mesh: trailSegment, spawnTime: timestamp });
-
-                    lastSpawnTime = timestamp;
-                }
-
-                trailSegments = trailSegments.filter(segment => {
-                    if (timestamp - segment.spawnTime > cubeLifetime) {
-                        scene.remove(segment.mesh);
-                        return false;
-                    }
-                    return true;
-                });
-
-                if (checkCollision(bikeModel.position) || checkBoundaries(bikeModel.position)) {
+                if (checkBoundaries(bikeModel.position)) {
                     gameOver = true;
                     console.log("Game Over!");
                     restartButton.style.display = 'block';
@@ -333,9 +249,7 @@
                 socket.send(JSON.stringify({
                     type: 'update',
                     position: bikeModel.position,
-                    rotation: bikeModel.rotation.y,
-                    newTrail: trailSegments.length > 0 ? trailSegments[trailSegments.length - 1].mesh.position : null,
-                    spawnTime: trailSegments.length > 0 ? trailSegments[trailSegments.length - 1].spawnTime : null
+                    rotation: bikeModel.rotation.y
                 }));
 
                 const offset = new THREE.Vector3(0, 5, -10);

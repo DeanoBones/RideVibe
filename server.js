@@ -33,9 +33,7 @@ wss.on('connection', (ws) => {
                     id: data.id || id,
                     position: data.position,
                     rotation: data.rotation,
-                    color: data.color || players[id].color,
-                    newTrail: data.newTrail,
-                    spawnTime: data.spawnTime
+                    color: data.color || players[id].color
                 };
                 wss.clients.forEach(client => {
                     if (client !== ws && client.readyState === WebSocket.OPEN) {
