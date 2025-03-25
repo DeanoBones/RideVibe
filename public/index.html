@@ -66,19 +66,22 @@
         camera.position.set(0, 5, -10);
 
         const keys = {};
-        let turnLeftPressed = false;  // Track turn states to prevent repeated snaps
+        let turnLeftPressed = false;
         let turnRightPressed = false;
+        let boostPressed = false; // Track boost state
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
+                if (event.key === 'ArrowUp') boostPressed = true;
             }
         });
         document.addEventListener('keyup', (event) => {
             keys[event.key] = false;
             if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = false;
             if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = false;
+            if (event.key === 'ArrowUp') boostPressed = false;
         });
 
         const baseSpeed = 6;
@@ -92,6 +95,31 @@
         let gameStarted = false;
         let lastTime = 0;
         let animationFrameId = null;
+
+        // Particle system for boost effect
+        let boostParticles;
+        const particleCount = 50;
+        const particles = new THREE.BufferGeometry();
+        const particlePositions = new Float32Array(particleCount * 3);
+        const particleVelocities = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            particlePositions[i * 3] = 0;     // x
+            particlePositions[i * 3 + 1] = 0; // y
+            particlePositions[i * 3 + 2] = 0; // z
+            particleVelocities[i * 3] = (Math.random() - 0.5) * 5;     // vx
+            particleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 5; // vy
+            particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 5; // vz
+        }
+        particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        const particleMaterial = new THREE.PointsMaterial({
+            color: 0xffff00, // Yellow for boost effect, adjust as needed
+            size: 0.2,
+            transparent: true,
+            opacity: 0.8
+        });
+        boostParticles = new THREE.Points(particles, particleMaterial);
+        boostParticles.visible = false; // Hidden by default
+        scene.add(boostParticles);
 
         const socket = new WebSocket(`wss://${window.location.host}`);
         let myId;
@@ -181,6 +209,8 @@
             }
             turnLeftPressed = false;
             turnRightPressed = false;
+            boostPressed = false;
+            boostParticles.visible = false; // Hide particles on reset
         }
 
         window.addEventListener('resize', () => {
@@ -219,7 +249,7 @@
                     0,
                     Math.random() * gridSize - halfGrid
                 );
-                bikeModel.rotation.y = 0; // Start facing forward (0 radians)
+                bikeModel.rotation.y = 0;
                 const startColor = colors[currentColorIndex].hex;
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(startColor);
@@ -267,10 +297,48 @@
         });
 
         function snapTo90Degrees(currentRotation) {
-            // Convert to degrees, round to nearest 90, then back to radians
             const degrees = currentRotation * (180 / Math.PI);
             const snappedDegrees = Math.round(degrees / 90) * 90;
             return snappedDegrees * (Math.PI / 180);
+        }
+
+        function updateBoostParticles(timestamp) {
+            if (!boostParticles.visible) return;
+
+            const positions = boostParticles.geometry.attributes.position.array;
+            const velocities = particleVelocities;
+
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] += velocities[i * 3] * 0.05;     // x
+                positions[i * 3 + 1] += velocities[i * 3 + 1] * 0.05; // y
+                positions[i * 3 + 2] += velocities[i * 3 + 2] * 0.05; // z
+
+                // Fade out particles over time
+                const age = timestamp - boostStartTime;
+                if (age > boostDuration) {
+                    boostParticles.visible = false;
+                }
+            }
+            boostParticles.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function activateBoostParticles() {
+            boostParticles.visible = true;
+            const positions = boostParticles.geometry.attributes.position.array;
+            const offset = new THREE.Vector3(
+                -Math.sin(bikeModel.rotation.y) * 2, // Behind bike
+                0.5,                                // Slightly above ground
+                -Math.cos(bikeModel.rotation.y) * 2  // Behind bike
+            );
+            const bikePos = bikeModel.position.clone().add(offset);
+
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 0.5;     // x
+                positions[i * 3 + 1] = bikePos.y + (Math.random() - 0.5) * 0.5; // y
+                positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 0.5; // z
+            }
+            boostParticles.geometry.attributes.position.needsUpdate = true;
+            particleMaterial.color.setHex(colors[currentColorIndex].hex); // Match bike color
         }
 
         function animate(timestamp) {
@@ -286,27 +354,29 @@
                 const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60;
                 lastTime = timestamp;
 
-                if (keys['w'] && timestamp - lastBoostTime >= boostCooldown && currentSpeed === baseSpeed) {
+                if (boostPressed && timestamp - lastBoostTime >= boostCooldown && currentSpeed === baseSpeed) {
                     currentSpeed = boostSpeed;
                     boostStartTime = timestamp;
                     lastBoostTime = timestamp;
+                    activateBoostParticles();
+                    boostPressed = false; // Reset to allow one boost per press
                 }
                 
                 if (currentSpeed === boostSpeed && timestamp - boostStartTime >= boostDuration) {
                     currentSpeed = baseSpeed;
+                    boostParticles.visible = false;
                 }
 
                 bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
                 bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
 
-                // Snap turns to 90-degree angles
                 if (turnLeftPressed) {
-                    bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2); // +90 degrees
-                    turnLeftPressed = false; // Reset to prevent continuous turning
+                    bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2);
+                    turnLeftPressed = false;
                 }
                 if (turnRightPressed) {
-                    bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y - Math.PI / 2); // -90 degrees
-                    turnRightPressed = false; // Reset to prevent continuous turning
+                    bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y - Math.PI / 2);
+                    turnRightPressed = false;
                 }
 
                 if (checkBoundaries(bikeModel.position)) {
@@ -321,6 +391,11 @@
                     rotation: bikeModel.rotation.y,
                     speed: currentSpeed
                 }));
+
+                // Update boost particles if active
+                if (currentSpeed === boostSpeed) {
+                    updateBoostParticles(timestamp);
+                }
 
                 const offset = new THREE.Vector3(0, 5, -10);
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
