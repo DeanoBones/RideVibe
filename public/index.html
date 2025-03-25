@@ -37,15 +37,37 @@
 
         const gridSize = 100;
         const divisions = 50;
-        const gridHelper = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
-        gridHelper.position.y = -1;
-        scene.add(gridHelper);
+
+        // Top floor
+        const gridHelperTop = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
+        gridHelperTop.position.y = -1;
+        scene.add(gridHelperTop);
         const planeGeometry = new THREE.PlaneGeometry(gridSize, gridSize);
         const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x001111, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
-        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-        plane.rotation.x = Math.PI / 2;
-        plane.position.y = -1.1;
-        scene.add(plane);
+        const planeTop = new THREE.Mesh(planeGeometry, planeMaterial);
+        planeTop.rotation.x = Math.PI / 2;
+        planeTop.position.y = -1.1;
+        scene.add(planeTop);
+
+        // Lower floor
+        const gridHelperBottom = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
+        gridHelperBottom.position.y = -10;
+        scene.add(gridHelperBottom);
+        const planeBottom = new THREE.Mesh(planeGeometry.clone(), planeMaterial.clone());
+        planeBottom.rotation.x = Math.PI / 2;
+        planeBottom.position.y = -10.1;
+        scene.add(planeBottom);
+
+        // Ramp
+        const rampWidth = 5;
+        const rampLength = 10;
+        const rampHeight = 9; // Drop from y=-1 to y=-10
+        const rampGeometry = new THREE.PlaneGeometry(rampWidth, Math.sqrt(rampLength * rampLength + rampHeight * rampHeight));
+        const rampMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
+        const ramp = new THREE.Mesh(rampGeometry, rampMaterial);
+        ramp.position.set(40, -5.5, 0); // Center between floors, near grid edge
+        ramp.rotation.z = -Math.atan2(rampHeight, rampLength); // Slope down
+        scene.add(ramp);
 
         const loader = new THREE.GLTFLoader();
         let bikeModel;
@@ -56,8 +78,8 @@
         const trailDepth = 0.15;
         let lastTrailPosition = null;
         const trailSpawnDistance = 1;
-        const trailLifetime = 10000; // 10 seconds
-        const trailOffsetDistance = 1; // Increased to 4 units behind
+        const trailLifetime = 10000;
+        const trailOffsetDistance = 1;
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -104,6 +126,8 @@
         let gameStarted = false;
         let lastTime = 0;
         let animationFrameId = null;
+        let verticalVelocity = 0;
+        const gravity = -20;
 
         // Particle system for boost effect
         let boostParticles;
@@ -209,7 +233,7 @@
                 emissiveIntensity: 0.8
             });
             const trailSegment = new THREE.Mesh(trailGeometry, material);
-            trailSegment.position.set(position.x, -0.5 + trailHeight / 2, position.z);
+            trailSegment.position.set(position.x, position.y - 0.5 + trailHeight / 2, position.z);
             trailSegment.rotation.y = rotation + Math.PI / 2;
             scene.add(trailSegment);
             trailSegments.push({ mesh: trailSegment, spawnTime: spawnTime || performance.now() });
@@ -235,6 +259,7 @@
             currentSpeed = baseSpeed;
             lastBoostTime = -boostCooldown;
             lastTime = 0;
+            verticalVelocity = 0;
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
@@ -261,7 +286,8 @@
                 const trailPos = segment.mesh.position;
                 const dx = bikePos.x - trailPos.x;
                 const dz = bikePos.z - trailPos.z;
-                const distance = Math.sqrt(dx * dx + dz * dz);
+                const dy = bikePos.y - trailPos.y;
+                const distance = Math.sqrt(dx * dx + dz * dz + dy * dy);
                 if (distance < bikeRadius + trailWidth / 2) return true;
             }
             return false;
@@ -269,7 +295,12 @@
 
         function checkBoundaries(bikePos) {
             const halfGrid = gridSize / 2;
-            return bikePos.x < -halfGrid || bikePos.x > halfGrid || bikePos.z < -halfGrid || bikePos.z > halfGrid;
+            return (bikePos.x < -halfGrid || bikePos.x > halfGrid || bikePos.z < -halfGrid || bikePos.z > halfGrid) && 
+                   (bikePos.y > -1 || bikePos.y < -10);
+        }
+
+        function isOnRamp(bikePos) {
+            return bikePos.x >= 35 && bikePos.x <= 45 && bikePos.z >= -rampWidth / 2 && bikePos.z <= rampWidth / 2 && bikePos.y <= 0 && bikePos.y >= -10;
         }
 
         const startButton = document.getElementById('startButton');
@@ -432,6 +463,18 @@
                 bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
                 bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
 
+                if (isOnRamp(bikeModel.position)) {
+                    verticalVelocity += gravity * deltaTime;
+                    bikeModel.position.y += verticalVelocity * deltaTime;
+                } else {
+                    verticalVelocity = 0;
+                    if (bikeModel.position.y > -4.5) {
+                        bikeModel.position.y = 0;
+                    } else {
+                        bikeModel.position.y = -9;
+                    }
+                }
+
                 if (turnLeftPressed) {
                     bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2);
                     turnLeftPressed = false;
@@ -441,7 +484,6 @@
                     turnRightPressed = false;
                 }
 
-                // Clean up expired trail segments
                 trailSegments = trailSegments.filter(segment => {
                     const age = timestamp - segment.spawnTime;
                     if (age > trailLifetime) {
@@ -457,11 +499,10 @@
                     restartButton.style.display = 'block';
                 }
 
-                // Trail spawning with flipped and increased offset
                 let newTrail = null;
                 if (shouldSpawnTrail(bikeModel.position)) {
                     const offset = new THREE.Vector3(
-                        Math.sin(bikeModel.rotation.y) * trailOffsetDistance, // Flipped to spawn behind
+                        Math.sin(bikeModel.rotation.y) * trailOffsetDistance,
                         0,
                         Math.cos(bikeModel.rotation.y) * trailOffsetDistance
                     );
