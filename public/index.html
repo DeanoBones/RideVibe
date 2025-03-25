@@ -83,22 +83,18 @@
         ];
         let currentColorIndex = 0;
 
-        // Initial camera position (will be overridden when attached)
         camera.position.set(0, 5, -10);
 
         const keys = {};
         let turnLeftPressed = false;
         let turnRightPressed = false;
         let boostPressed = false;
-        let jumpPressed = false;
-
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
                 if (event.key === 'ArrowUp') boostPressed = true;
-                if (event.key === ' ') jumpPressed = true;
             }
         });
         document.addEventListener('keyup', (event) => {
@@ -106,7 +102,6 @@
             if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = false;
             if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = false;
             if (event.key === 'ArrowUp') boostPressed = false;
-            if (event.key === ' ') jumpPressed = false;
         });
 
         const baseSpeed = 6;
@@ -255,8 +250,7 @@
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
-            camera.position.set(0, 5, -10); // Reset to default
-            scene.add(camera); // Ensure camera is back in scene
+            camera.position.set(0, 5, -10);
             for (let key in keys) {
                 keys[key] = false;
             }
@@ -264,7 +258,6 @@
             turnRightPressed = false;
             boostPressed = false;
             boostParticles.visible = false;
-            jumpPressed = false;
         }
 
         window.addEventListener('resize', () => {
@@ -322,12 +315,6 @@
                 });
                 trailMaterial.color.setHex(startColor);
                 trailMaterial.emissive.setHex(startColor);
-
-                // Attach camera to bike
-                bikeModel.add(camera);
-                camera.position.set(0, 5, -10); // Local position: above and behind
-                camera.lookAt(0, 0, 0); // Look at bike's origin in local space
-
                 socket.send(JSON.stringify({
                     type: 'start',
                     id: myId,
@@ -456,17 +443,6 @@
                 bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
                 bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
 
-                if (jumpPressed) {
-                    if (bikeModel.position.y === 0) {
-                        bikeModel.position.y = 7.9;
-                        bikeModel.rotation.x = Math.PI;
-                    } else {
-                        bikeModel.position.y = 0;
-                        bikeModel.rotation.x = 0;
-                    }
-                    jumpPressed = false;
-                }
-
                 if (turnLeftPressed) {
                     bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2);
                     turnLeftPressed = false;
@@ -517,7 +493,10 @@
                     updateBoostParticles(timestamp);
                 }
 
-                // Camera is now attached to bikeModel, no manual positioning needed
+                const offset = new THREE.Vector3(0, 5, -10);
+                const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
+                camera.position.lerp(cameraPosition, 0.1);
+                camera.lookAt(bikeModel.position);
             }
 
             renderer.render(scene, camera);
