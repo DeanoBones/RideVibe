@@ -510,11 +510,17 @@
                     updateBoostParticles(timestamp);
                 }
 
-                // Camera follows bike with consistent offset and matches bike's x-rotation
-                const offset = new THREE.Vector3(0, 5, -10);
+                // Camera follows bike, staying behind based on direction
+                const behindDistance = bikeModel.rotation.x === Math.PI ? 10 : -10; // Flip z-offset when upside down
+                const offset = new THREE.Vector3(
+                    0,
+                    5, // Always above in local space
+                    behindDistance
+                );
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
-                camera.rotation.x = bikeModel.rotation.x; // Sync camera flip with bike
+                camera.rotation.x = bikeModel.rotation.x; // Sync flip
+                camera.rotation.y = bikeModel.rotation.y; // Sync yaw to keep behind
                 camera.lookAt(bikeModel.position);
             }
 
