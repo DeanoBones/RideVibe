@@ -80,6 +80,7 @@
         let gameOver = false;
         let gameStarted = false;
         let lastTime = 0;
+        let animationFrameId = null; // To cancel animation frame
 
         const socket = new WebSocket(`wss://${window.location.host}`);
         let myId;
@@ -94,11 +95,9 @@
             switch (data.type) {
                 case 'init':
                     myId = data.id;
-                    // Request current players when we connect
                     socket.send(JSON.stringify({ type: 'getPlayers' }));
                     break;
                 case 'currentPlayers':
-                    // Add all existing players when we join
                     data.players.forEach(player => {
                         if (player.id !== myId) addOtherPlayer(player);
                     });
@@ -152,12 +151,25 @@
         }
 
         function resetGame() {
-            if (bikeModel) scene.remove(bikeModel);
-            bikeModel = null;
+            if (bikeModel) {
+                scene.remove(bikeModel);
+                bikeModel = null;
+            }
             gameOver = false;
             gameStarted = false;
             currentSpeed = baseSpeed;
             lastBoostTime = -boostCooldown;
+            lastTime = 0;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId); // Cancel any existing animation frame
+                animationFrameId = null;
+            }
+            // Reset camera position
+            camera.position.set(0, 5, -10);
+            // Clear keys to prevent residual input
+            for (let key in keys) {
+                keys[key] = false;
+            }
         }
 
         window.addEventListener('resize', () => {
@@ -240,16 +252,17 @@
 
         restartButton.addEventListener('click', () => {
             resetGame();
-            startGame();
+            setTimeout(startGame, 50); // Small delay to ensure reset completes
         });
 
         function animate(timestamp) {
             if (!gameStarted) {
                 renderer.render(scene, camera);
+                animationFrameId = null;
                 return;
             }
 
-            requestAnimationFrame(animate);
+            animationFrameId = requestAnimationFrame(animate);
 
             if (bikeModel && !gameOver) {
                 const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60;
