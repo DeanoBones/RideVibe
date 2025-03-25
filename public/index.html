@@ -52,12 +52,12 @@
         let trailMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
         let trailSegments = [];
         const trailHeight = 2;
-        const trailWidth = 0.5;
+        const trailWidth = 0.2;
         const trailDepth = 0.15;
         let lastTrailPosition = null;
         const trailSpawnDistance = 1;
         const trailLifetime = 10000; // 10 seconds
-        const trailOffsetDistance = 4; // Increased to 4 units behind
+        const trailOffsetDistance = 2; // Increased to 4 units behind
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
