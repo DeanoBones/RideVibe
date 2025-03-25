@@ -231,7 +231,7 @@
             const trailSegment = new THREE.Mesh(trailGeometry, material);
             trailSegment.position.set(
                 position.x,
-                isUpper ? (9 - 0.5 - trailHeight / 2) : (-0.5 + trailHeight / 2),
+                isUpper ? (7.9 - 0.5 - trailHeight / 2) : (-0.5 + trailHeight / 2),
                 position.z
             );
             trailSegment.rotation.y = rotation + Math.PI / 2;
@@ -464,7 +464,7 @@
 
                 if (jumpPressed) {
                     isOnUpperFloor = !isOnUpperFloor;
-                    bikeModel.position.y = isOnUpperFloor ? 9 : 0;
+                    bikeModel.position.y = isOnUpperFloor ? 7.9 : 0;
                     bikeModel.rotation.x = isOnUpperFloor ? Math.PI : 0;
                     jumpPressed = false;
                 }
@@ -520,7 +520,7 @@
                     updateBoostParticles(timestamp);
                 }
 
-                const offset = new THREE.Vector3(0, isOnUpperFloor ? -5 : 5, -10);
+                const offset = new THREE.Vector3(0, 5, -10);
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
                 camera.lookAt(bikeModel.position);
