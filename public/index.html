@@ -66,12 +66,23 @@
         camera.position.set(0, 5, -10);
 
         const keys = {};
-        document.addEventListener('keydown', (event) => keys[event.key] = true);
-        document.addEventListener('keyup', (event) => keys[event.key] = false);
+        let turnLeftPressed = false;  // Track turn states to prevent repeated snaps
+        let turnRightPressed = false;
+        document.addEventListener('keydown', (event) => {
+            if (!keys[event.key]) {
+                keys[event.key] = true;
+                if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
+                if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
+            }
+        });
+        document.addEventListener('keyup', (event) => {
+            keys[event.key] = false;
+            if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = false;
+            if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = false;
+        });
 
         const baseSpeed = 6;
         const boostSpeed = 12;
-        const turnSpeed = 1.8;
         let currentSpeed = baseSpeed;
         let boostStartTime = 0;
         const boostDuration = 2000;
@@ -80,7 +91,7 @@
         let gameOver = false;
         let gameStarted = false;
         let lastTime = 0;
-        let animationFrameId = null; // To cancel animation frame
+        let animationFrameId = null;
 
         const socket = new WebSocket(`wss://${window.location.host}`);
         let myId;
@@ -161,15 +172,15 @@
             lastBoostTime = -boostCooldown;
             lastTime = 0;
             if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId); // Cancel any existing animation frame
+                cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
-            // Reset camera position
             camera.position.set(0, 5, -10);
-            // Clear keys to prevent residual input
             for (let key in keys) {
                 keys[key] = false;
             }
+            turnLeftPressed = false;
+            turnRightPressed = false;
         }
 
         window.addEventListener('resize', () => {
@@ -208,7 +219,7 @@
                     0,
                     Math.random() * gridSize - halfGrid
                 );
-                bikeModel.rotation.y = 0;
+                bikeModel.rotation.y = 0; // Start facing forward (0 radians)
                 const startColor = colors[currentColorIndex].hex;
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(startColor);
@@ -252,8 +263,15 @@
 
         restartButton.addEventListener('click', () => {
             resetGame();
-            setTimeout(startGame, 50); // Small delay to ensure reset completes
+            setTimeout(startGame, 50);
         });
+
+        function snapTo90Degrees(currentRotation) {
+            // Convert to degrees, round to nearest 90, then back to radians
+            const degrees = currentRotation * (180 / Math.PI);
+            const snappedDegrees = Math.round(degrees / 90) * 90;
+            return snappedDegrees * (Math.PI / 180);
+        }
 
         function animate(timestamp) {
             if (!gameStarted) {
@@ -281,8 +299,15 @@
                 bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
                 bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
 
-                if (keys['a'] || keys['ArrowLeft']) bikeModel.rotation.y += turnSpeed * deltaTime;
-                if (keys['d'] || keys['ArrowRight']) bikeModel.rotation.y -= turnSpeed * deltaTime;
+                // Snap turns to 90-degree angles
+                if (turnLeftPressed) {
+                    bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2); // +90 degrees
+                    turnLeftPressed = false; // Reset to prevent continuous turning
+                }
+                if (turnRightPressed) {
+                    bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y - Math.PI / 2); // -90 degrees
+                    turnRightPressed = false; // Reset to prevent continuous turning
+                }
 
                 if (checkBoundaries(bikeModel.position)) {
                     gameOver = true;
