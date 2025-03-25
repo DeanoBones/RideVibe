@@ -29,9 +29,9 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.1);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
         scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.1);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
         directionalLight.position.set(5, 5, 5);
         scene.add(directionalLight);
 
@@ -179,7 +179,7 @@
                         trailMaterial: new THREE.MeshPhongMaterial({
                             color: player.color || 0x00ffff,
                             emissive: player.color || 0x00ffff,
-                            emissiveIntensity: 1.5
+                            emissiveIntensity: 0.8
                         })
                     };
                 });
@@ -206,7 +206,7 @@
             const material = (color === colors[currentColorIndex].hex && myId) ? trailMaterial : new THREE.MeshPhongMaterial({
                 color: color,
                 emissive: color,
-                emissiveIntensity: 1.5
+                emissiveIntensity: 0.8
             });
             const trailSegment = new THREE.Mesh(trailGeometry, material);
             trailSegment.position.set(position.x, -0.5 + trailHeight / 2, position.z);
