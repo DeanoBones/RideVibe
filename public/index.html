@@ -83,6 +83,7 @@
         ];
         let currentColorIndex = 0;
 
+        // Initial camera position (will be overridden when attached)
         camera.position.set(0, 5, -10);
 
         const keys = {};
@@ -90,7 +91,6 @@
         let turnRightPressed = false;
         let boostPressed = false;
         let jumpPressed = false;
-        let isOnUpperFloor = false;
 
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
@@ -255,7 +255,8 @@
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
-            camera.position.set(0, 5, -10);
+            camera.position.set(0, 5, -10); // Reset to default
+            scene.add(camera); // Ensure camera is back in scene
             for (let key in keys) {
                 keys[key] = false;
             }
@@ -321,6 +322,12 @@
                 });
                 trailMaterial.color.setHex(startColor);
                 trailMaterial.emissive.setHex(startColor);
+
+                // Attach camera to bike
+                bikeModel.add(camera);
+                camera.position.set(0, 5, -10); // Local position: above and behind
+                camera.lookAt(0, 0, 0); // Look at bike's origin in local space
+
                 socket.send(JSON.stringify({
                     type: 'start',
                     id: myId,
@@ -510,18 +517,7 @@
                     updateBoostParticles(timestamp);
                 }
 
-                // Camera follows bike, staying behind based on direction
-                const behindDistance = bikeModel.rotation.x === Math.PI ? 10 : -10; // Flip z-offset when upside down
-                const offset = new THREE.Vector3(
-                    0,
-                    5, // Always above in local space
-                    behindDistance
-                );
-                const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
-                camera.position.lerp(cameraPosition, 0.1);
-                camera.rotation.x = bikeModel.rotation.x; // Sync flip
-                camera.rotation.y = bikeModel.rotation.y; // Sync yaw to keep behind
-                camera.lookAt(bikeModel.position);
+                // Camera is now attached to bikeModel, no manual positioning needed
             }
 
             renderer.render(scene, camera);
