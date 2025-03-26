@@ -2,30 +2,18 @@
 <head>
     <title>RideVibe - Tron Bike Game</title>
     <style>
-        body { 
-            margin: 0; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh; 
-            flex-direction: column; 
-        }
-        canvas { 
-            width: 100%; 
-            height: 100vh; 
-        }
+        body { margin: 0; }
+        canvas { width: 100%; height: 100vh; }
         #startButton, #colorButton, #restartButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
-            margin: 10px 0; /* Add space between buttons */
         }
-        #restartButton {
-            display: none; /* Hide initially */
-        }
-        #colorButton {
-            margin-top: 10px; /* Space between start and change color button */
-        }
+        #colorButton { top: 60px; transition: background-color 0.3s; }
+        #restartButton { top: 100px; display: none; }
     </style>
 </head>
 <body>
