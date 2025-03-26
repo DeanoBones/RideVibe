@@ -102,7 +102,7 @@
                         bikeModel.rotation.x = 0; // Upright
                         jumped = false;
                     } else {
-                        bikeModel.position.y = 7.8; // To ceiling
+                        bikeModel.position.y = 7.9; // To ceiling
                         bikeModel.rotation.x = Math.PI; // Upside down (180 degrees)
                         jumped = true;
                     }
@@ -507,7 +507,9 @@
                     updateBoostParticles(timestamp);
                 }
 
-                const offset = new THREE.Vector3(0, 5, -10);
+                // Adjusted camera logic
+                const zOffset = jumped ? 10 : -10; // Flip Z offset when upside down
+                const offset = new THREE.Vector3(0, 5, zOffset); // 5 up, behind based on jumped state
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
                 camera.lookAt(bikeModel.position);
