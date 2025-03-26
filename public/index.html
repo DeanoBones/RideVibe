@@ -89,7 +89,7 @@
         let turnLeftPressed = false;
         let turnRightPressed = false;
         let boostPressed = false;
-        let jumped = false; // New variable to track if the bike is on the ceiling
+        let jumped = false; // Tracks if the bike is on the ceiling
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
@@ -98,10 +98,12 @@
                 if (event.key === 'ArrowUp') boostPressed = true;
                 if (event.key === ' ' && bikeModel && !gameOver) { // Spacebar to toggle between ceiling and ground
                     if (jumped) {
-                        bikeModel.position.y = 0; // Jump back to ground
+                        bikeModel.position.y = 0; // Back to ground
+                        bikeModel.rotation.x = 0; // Upright
                         jumped = false;
                     } else {
-                        bikeModel.position.y = 7.9; // Jump to ceiling
+                        bikeModel.position.y = 7.9; // To ceiling
+                        bikeModel.rotation.x = Math.PI; // Upside down (180 degrees)
                         jumped = true;
                     }
                 }
@@ -138,7 +140,7 @@
             particlePositions[i * 3 + 2] = 0;
             particleVelocities[i * 3] = (Math.random() - 0.5) * 5;
             particleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 5;
-            particleVelocities[i * 3 + 2] = (Math.randomHOLDER - 0.5) * 5;
+            particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 5;
         }
         particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
         const particleMaterial = new THREE.PointsMaterial({
@@ -319,6 +321,7 @@
                     0,
                     Math.random() * gridSize - halfGrid
                 );
+                bikeModel.rotation.x = 0; // Ensure upright at start
                 bikeModel.rotation.y = 0;
                 const startColor = colors[currentColorIndex].hex;
                 bikeModel.traverse(child => {
