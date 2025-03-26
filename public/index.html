@@ -100,10 +100,12 @@
                     if (jumped) {
                         bikeModel.position.y = 0; // Back to ground
                         bikeModel.rotation.x = 0; // Upright
+                        bikeModel.rotation.y -= Math.PI; // Undo the 180-degree Y rotation
                         jumped = false;
                     } else {
                         bikeModel.position.y = 7.9; // To ceiling
                         bikeModel.rotation.x = Math.PI; // Upside down
+                        bikeModel.rotation.y += Math.PI; // 180-degree Y rotation to flip facing
                         jumped = true;
                     }
                 }
@@ -507,7 +509,7 @@
                     updateBoostParticles(timestamp);
                 }
 
-                // Updated camera logic with Z-axis flip
+                // Camera logic with Z-axis flip
                 const zOffset = jumped ? 10 : -10; // Flip Z offset when upside down
                 const offset = new THREE.Vector3(0, 5, zOffset); // 5 up, dynamic Z behind
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
