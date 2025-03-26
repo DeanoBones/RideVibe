@@ -507,10 +507,16 @@
                     updateBoostParticles(timestamp);
                 }
 
-                // Adjusted camera logic
-                const zOffset = jumped ? 10 : -10; // Flip Z offset when upside down
-                const offset = new THREE.Vector3(0, 5, zOffset); // 5 up, behind based on jumped state
-                const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
+                // New camera logic
+                const direction = new THREE.Vector3(
+                    Math.sin(bikeModel.rotation.y),
+                    0,
+                    Math.cos(bikeModel.rotation.y)
+                ).normalize(); // Bike's forward direction based on Y rotation
+                const distanceBehind = 10; // Distance behind the bike
+                const heightAbove = 5; // Height above the bike
+                const behindVector = direction.multiplyScalar(jumped ? distanceBehind : -distanceBehind); // Flip direction when upside down
+                const cameraPosition = bikeModel.position.clone().add(behindVector).add(new THREE.Vector3(0, heightAbove, 0));
                 camera.position.lerp(cameraPosition, 0.1);
                 camera.lookAt(bikeModel.position);
             }
