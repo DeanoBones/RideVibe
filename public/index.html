@@ -100,12 +100,10 @@
                     if (jumped) {
                         bikeModel.position.y = 0; // Back to ground
                         bikeModel.rotation.x = 0; // Upright
-                        camera.rotation.x = 0; // Camera upright
                         jumped = false;
                     } else {
                         bikeModel.position.y = 7.9; // To ceiling
                         bikeModel.rotation.x = Math.PI; // Upside down
-                        camera.rotation.x = Math.PI; // Camera upside down
                         jumped = true;
                     }
                 }
@@ -265,7 +263,6 @@
                 animationFrameId = null;
             }
             camera.position.set(0, 5, -10);
-            camera.rotation.x = 0; // Reset camera rotation
             for (let key in keys) {
                 keys[key] = false;
             }
@@ -510,8 +507,9 @@
                     updateBoostParticles(timestamp);
                 }
 
-                // Original camera logic
-                const offset = new THREE.Vector3(0, 5, -10); // 5 up, 10 behind
+                // Updated camera logic with Z-axis flip
+                const zOffset = jumped ? 10 : -10; // Flip Z offset when upside down
+                const offset = new THREE.Vector3(0, 5, zOffset); // 5 up, dynamic Z behind
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
                 camera.lookAt(bikeModel.position);
