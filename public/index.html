@@ -509,7 +509,8 @@
 
                 // Updated camera logic with Z-axis flip
                 const zOffset = jumped ? -20 : -10; // Flip Z offset when upside down
-                const offset = new THREE.Vector3(0, 5, zOffset); // 5 up, dynamic Z behind
+				const xOffset = jumped ? -20 : 0; // Flip Z offset when upside down
+                const offset = new THREE.Vector3(xOffset, 5, zOffset); // 5 up, dynamic Z behind
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
                 camera.lookAt(bikeModel.position);
