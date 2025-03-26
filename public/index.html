@@ -99,7 +99,7 @@
                 if (event.key === ' ' && bikeModel && !gameOver) { // Spacebar to toggle between ceiling and ground
                     if (jumped) {
                         bikeModel.position.y = 0; // Back to ground
-                        bikeModel.rotation.x = 0; // Upright
+                        bikeModel.rotation.z = 0; // Upright
                         jumped = false;
                     } else {
                         bikeModel.position.y = 7; // To ceiling
