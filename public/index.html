@@ -95,6 +95,9 @@
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
                 if (event.key === 'ArrowUp') boostPressed = true;
+                if (event.key === ' ' && bikeModel && !gameOver) { // Spacebar to jump to ceiling
+                    bikeModel.position.y = 7.9; // Set bike's y-position to the ceiling
+                }
             }
         });
         document.addEventListener('keyup', (event) => {
