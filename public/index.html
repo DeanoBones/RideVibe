@@ -100,10 +100,12 @@
                     if (jumped) {
                         bikeModel.position.y = 0; // Back to ground
                         bikeModel.rotation.x = 0; // Upright
+                        camera.rotation.x = 0; // Camera upright
                         jumped = false;
                     } else {
                         bikeModel.position.y = 7.9; // To ceiling
-                        bikeModel.rotation.x = Math.PI; // Upside down (180 degrees)
+                        bikeModel.rotation.x = Math.PI; // Upside down
+                        camera.rotation.x = Math.PI; // Camera upside down
                         jumped = true;
                     }
                 }
@@ -263,6 +265,7 @@
                 animationFrameId = null;
             }
             camera.position.set(0, 5, -10);
+            camera.rotation.x = 0; // Reset camera rotation
             for (let key in keys) {
                 keys[key] = false;
             }
@@ -507,16 +510,9 @@
                     updateBoostParticles(timestamp);
                 }
 
-                // New camera logic
-                const direction = new THREE.Vector3(
-                    Math.sin(bikeModel.rotation.y),
-                    0,
-                    Math.cos(bikeModel.rotation.y)
-                ).normalize(); // Bike's forward direction based on Y rotation
-                const distanceBehind = 10; // Distance behind the bike
-                const heightAbove = 5; // Height above the bike
-                const behindVector = direction.multiplyScalar(jumped ? distanceBehind : -distanceBehind); // Flip direction when upside down
-                const cameraPosition = bikeModel.position.clone().add(behindVector).add(new THREE.Vector3(0, heightAbove, 0));
+                // Original camera logic
+                const offset = new THREE.Vector3(0, 5, -10); // 5 up, 10 behind
+                const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
                 camera.position.lerp(cameraPosition, 0.1);
                 camera.lookAt(bikeModel.position);
             }
