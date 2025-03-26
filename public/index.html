@@ -89,14 +89,21 @@
         let turnLeftPressed = false;
         let turnRightPressed = false;
         let boostPressed = false;
+        let jumped = false; // New variable to track if the bike is on the ceiling
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
                 if (event.key === 'ArrowUp') boostPressed = true;
-                if (event.key === ' ' && bikeModel && !gameOver) { // Spacebar to jump to ceiling
-                    bikeModel.position.y = 7.9; // Set bike's y-position to the ceiling
+                if (event.key === ' ' && bikeModel && !gameOver) { // Spacebar to toggle between ceiling and ground
+                    if (jumped) {
+                        bikeModel.position.y = 0; // Jump back to ground
+                        jumped = false;
+                    } else {
+                        bikeModel.position.y = 7.9; // Jump to ceiling
+                        jumped = true;
+                    }
                 }
             }
         });
@@ -131,7 +138,7 @@
             particlePositions[i * 3 + 2] = 0;
             particleVelocities[i * 3] = (Math.random() - 0.5) * 5;
             particleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 5;
-            particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 5;
+            particleVelocities[i * 3 + 2] = (Math.randomHOLDER - 0.5) * 5;
         }
         particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
         const particleMaterial = new THREE.PointsMaterial({
@@ -260,6 +267,7 @@
             turnLeftPressed = false;
             turnRightPressed = false;
             boostPressed = false;
+            jumped = false; // Reset jumped to false
             boostParticles.visible = false;
         }
 
