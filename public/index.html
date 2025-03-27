@@ -54,13 +54,13 @@
         const divisions = 50;
 
         const gridHelperLower = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
-        gridHelperLower.position.y = -1;
+        gridHelperLower.position.y = 0;
         scene.add(gridHelperLower);
         const planeGeometry = new THREE.PlaneGeometry(gridSize, gridSize);
         const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x001111, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
         const planeLower = new THREE.Mesh(planeGeometry, planeMaterial);
         planeLower.rotation.x = Math.PI / 2;
-        planeLower.position.y = -0;
+        planeLower.position.y = 0;
         scene.add(planeLower);
 
         const gridHelperUpper = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
@@ -205,7 +205,7 @@
                     otherBike.scale.set(2, 2, 2);
                     otherBike.position.set(player.position.x, player.position.y, player.position.z);
                     otherBike.rotation.y = player.rotation;
-                    otherBike.rotation.z = player.rotationZ || 0; // Apply initial rotation.z
+                    otherBike.rotation.z = player.rotationZ || 0;
                     otherBike.traverse(child => {
                         if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
                     });
@@ -227,7 +227,7 @@
                 const other = otherPlayers[player.id];
                 other.model.position.set(player.position.x, player.position.y, player.position.z);
                 other.model.rotation.y = player.rotation;
-                other.model.rotation.z = player.rotationZ || 0; // Update rotation.z
+                other.model.rotation.z = player.rotationZ || 0;
                 if (player.color) {
                     other.trailMaterial.color.setHex(player.color);
                     other.trailMaterial.emissive.setHex(player.color);
@@ -246,7 +246,8 @@
                 emissiveIntensity: 0.8
             });
             const trailSegment = new THREE.Mesh(trailGeometry, material);
-            trailSegment.position.set(position.x, position.y + trailHeight / 2, position.z);
+            const offsetDown = -1; // Add the wall height offset
+            trailSegment.position.set(position.x, position.y + trailHeight / 2 - offsetDown, position.z);
             trailSegment.rotation.y = rotation + Math.PI / 2;
             scene.add(trailSegment);
             trailSegments.push({ mesh: trailSegment, spawnTime: spawnTime || performance.now() });
@@ -353,7 +354,7 @@
                     id: myId,
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
-                    rotationZ: bikeModel.rotation.z, // Add rotationZ
+                    rotationZ: bikeModel.rotation.z,
                     color: startColor,
                     speed: currentSpeed
                 }));
@@ -514,7 +515,7 @@
                     type: 'update',
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
-                    rotationZ: bikeModel.rotation.z, // Add rotationZ
+                    rotationZ: bikeModel.rotation.z,
                     speed: currentSpeed,
                     newTrail: newTrail,
                     color: colors[currentColorIndex].hex,
