@@ -4,7 +4,7 @@
     <style>
         body {
             margin: 0;
-            position: relative;
+            position: relative; /* Ensures absolute positioning works relative to the body */
         }
         canvas {
             width: 100%;
@@ -12,22 +12,22 @@
         }
         #startButton, #colorButton, #restartButton {
             position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
+            left: 50%; /* Center horizontally */
+            transform: translateX(-50%); /* Perfectly center the buttons */
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
         }
         #startButton {
-            top: 45%;
+            top: 45%; /* Adjust this to position Start higher or lower */
         }
         #colorButton {
-            top: 50%;
+            top: 50%; /* Just below the start button */
             transition: background-color 0.3s;
         }
         #restartButton {
-            top: 50%;
-            display: none;
+            top: 50%; /* Below the color button */
+            display: none; /* Hide it initially */
         }
     </style>
 </head>
@@ -53,6 +53,7 @@
         const gridSize = 100;
         const divisions = 50;
 
+        // Lower floor
         const gridHelperLower = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
         gridHelperLower.position.y = -1;
         scene.add(gridHelperLower);
@@ -63,6 +64,7 @@
         planeLower.position.y = -1.1;
         scene.add(planeLower);
 
+        // Upper floor
         const gridHelperUpper = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
         gridHelperUpper.position.y = 8;
         scene.add(gridHelperUpper);
@@ -102,22 +104,21 @@
         let turnLeftPressed = false;
         let turnRightPressed = false;
         let boostPressed = false;
-        let jumped = false;
-
+        let jumped = false; // Tracks if the bike is on the ceiling
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
                 if (event.key === 'ArrowUp') boostPressed = true;
-                if (event.key === ' ' && bikeModel && !gameOver) {
+                if (event.key === ' ' && bikeModel && !gameOver) { // Spacebar to toggle between ceiling and ground
                     if (jumped) {
-                        bikeModel.position.y = 0;
-                        bikeModel.rotation.z = 0;
+                        bikeModel.position.y = 0; // Back to ground
+                        bikeModel.rotation.z = 0; // Upright
                         jumped = false;
                     } else {
-                        bikeModel.position.y = 7;
-                        bikeModel.rotation.z = Math.PI;
+                        bikeModel.position.y = 7; // To ceiling
+                        bikeModel.rotation.z = Math.PI; // Upside down (180 degrees)
                         jumped = true;
                     }
                 }
@@ -142,6 +143,7 @@
         let lastTime = 0;
         let animationFrameId = null;
 
+        // Particle system for boost effect
         let boostParticles;
         const particleCount = 50;
         const particles = new THREE.BufferGeometry();
@@ -191,9 +193,7 @@
                     break;
                 case 'update':
                     updateOtherPlayer(data);
-                    if (data.newTrail && data.id !== myId) {
-                        spawnTrailSegment(data.newTrail, data.rotation, data.color, data.spawnTime, data.jumped);
-                    }
+                    if (data.newTrail && data.id !== myId) spawnTrailSegment(data.newTrail, data.rotation, data.color, data.spawnTime, data.jumped); // Pass jumped state
                     break;
                 case 'removePlayer':
                     removeOtherPlayer(data.id);
@@ -239,7 +239,7 @@
             }
         }
 
-        function spawnTrailSegment(position, rotation, color, spawnTime, jumpedState = false) {
+        function spawnTrailSegment(position, rotation, color, spawnTime, jumpedState = false) { // Added jumpedState parameter
             const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
             const material = (color === colors[currentColorIndex].hex && myId) ? trailMaterial : new THREE.MeshPhongMaterial({
                 color: color,
@@ -247,6 +247,7 @@
                 emissiveIntensity: 0.8
             });
             const trailSegment = new THREE.Mesh(trailGeometry, material);
+            // Set y-position based on the bike's current floor
             const trailY = jumpedState ? 7 - 0.5 + trailHeight / 2 : -0.5 + trailHeight / 2;
             trailSegment.position.set(position.x, trailY, position.z);
             trailSegment.rotation.y = rotation + Math.PI / 2;
@@ -296,17 +297,20 @@
         });
 
         function checkCollision(bikePos) {
-            const bikeRadius = 0.5;
-            const bikeHeight = 1.0;
+            const bikeRadius = 0.5; // Horizontal radius
+            const bikeHeight = 1.0; // Approximate height of the bike for collision (adjust if needed)
             for (let segment of trailSegments) {
                 const trailPos = segment.mesh.position;
                 const dx = bikePos.x - trailPos.x;
-                const dy = bikePos.y - trailPos.y;
+                const dy = bikePos.y - trailPos.y; // Add y-difference
                 const dz = bikePos.z - trailPos.z;
 
+                // Check horizontal distance (x, z plane)
                 const horizontalDistance = Math.sqrt(dx * dx + dz * dz);
+                // Check vertical distance (y-axis)
                 const verticalDistance = Math.abs(dy);
 
+                // Collision occurs if both horizontal and vertical distances are within bounds
                 if (horizontalDistance < bikeRadius + trailWidth / 2 && verticalDistance < bikeHeight + trailHeight / 2) {
                     return true;
                 }
@@ -344,7 +348,7 @@
                     0,
                     Math.random() * gridSize - halfGrid
                 );
-                bikeModel.rotation.x = 0;
+                bikeModel.rotation.x = 0; // Ensure upright at start
                 bikeModel.rotation.y = 0;
                 const startColor = colors[currentColorIndex].hex;
                 bikeModel.traverse(child => {
@@ -358,8 +362,7 @@
                     position: bikeModel.position,
                     rotation: bikeModel.rotation.y,
                     color: startColor,
-                    speed: currentSpeed,
-                    jumped: jumped
+                    speed: currentSpeed
                 }));
                 animate(0);
             });
@@ -391,7 +394,7 @@
                     rotation: bikeModel.rotation.y,
                     color: newColor,
                     speed: currentSpeed,
-                    jumped: jumped
+                    jumped: jumped // Include jumped state
                 }));
             }
             updateColorButton();
@@ -514,7 +517,7 @@
                         Math.cos(bikeModel.rotation.y) * trailOffsetDistance
                     );
                     newTrail = bikeModel.position.clone().sub(offset);
-                    spawnTrailSegment(newTrail, bikeModel.rotation.y, colors[currentColorIndex].hex, timestamp, jumped);
+                    spawnTrailSegment(newTrail, bikeModel.rotation.y, colors[currentColorIndex].hex, timestamp, jumped); // Pass jumped state
                     lastTrailPosition = newTrail.clone();
                 }
 
@@ -526,7 +529,7 @@
                     newTrail: newTrail,
                     color: colors[currentColorIndex].hex,
                     spawnTime: timestamp,
-                    jumped: jumped
+                    jumped: jumped // Include jumped state
                 }));
 
                 if (currentSpeed === boostSpeed) {
