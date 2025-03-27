@@ -225,19 +225,26 @@
         }
 
         function updateOtherPlayer(player) {
-            if (otherPlayers[player.id]) {
-                const other = otherPlayers[player.id];
-                other.model.position.set(player.position.x, player.position.y, player.position.z);
-                other.model.rotation.y = player.rotation;
-                if (player.color) {
-                    other.trailMaterial.color.setHex(player.color);
-                    other.trailMaterial.emissive.setHex(player.color);
-                    other.model.traverse(child => {
-                        if (child.isMesh && child.material) child.material.color.setHex(player.color);
-                    });
-                }
-            }
+    if (otherPlayers[player.id]) {
+        const other = otherPlayers[player.id];
+        other.model.position.set(player.position.x, player.position.y, player.position.z);
+        other.model.rotation.y = player.rotation;
+
+        // Update the jumped state
+        if (player.jumped !== undefined) {
+            other.jumped = player.jumped;
         }
+
+        if (player.color) {
+            other.trailMaterial.color.setHex(player.color);
+            other.trailMaterial.emissive.setHex(player.color);
+            other.model.traverse(child => {
+                if (child.isMesh && child.material) child.material.color.setHex(player.color);
+            });
+        }
+    }
+}
+
 
         function spawnTrailSegment(position, rotation, color, spawnTime, jumpedState = false) {
             const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
