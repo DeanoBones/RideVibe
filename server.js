@@ -22,7 +22,7 @@ wss.on('connection', (ws) => {
                 rotation: data.rotation,
                 color: data.color,
                 speed: data.speed || 6,
-                jumped: data.jumped || false // Include jumped, default to false
+                jumped: data.jumped || false // Add jumped to start
             };
             wss.clients.forEach(client => {
                 if (client.readyState === WebSocket.OPEN) {
@@ -37,15 +37,16 @@ wss.on('connection', (ws) => {
                     rotation: data.rotation,
                     color: data.color || players[id].color,
                     speed: data.speed || players[id].speed,
-                    newTrail: data.newTrail,
-                    jumped: data.jumped !== undefined ? data.jumped : players[id].jumped // Preserve jumped state
+                    newTrail: data.newTrail, // Keep newTrail as is
+                    jumped: data.jumped !== undefined ? data.jumped : players[id].jumped || false // Add jumped, preserve previous state if not provided
                 };
                 wss.clients.forEach(client => {
                     if (client.readyState === WebSocket.OPEN) {
+                        // Include all fields from players[id] plus additional data from the update
                         client.send(JSON.stringify({ 
                             type: 'update', 
                             ...players[id],
-                            spawnTime: data.spawnTime // Include spawnTime for consistency
+                            spawnTime: data.spawnTime // Include spawnTime to match client expectation
                         }));
                     }
                 });
