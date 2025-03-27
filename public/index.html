@@ -61,7 +61,7 @@
         const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x001111, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
         const planeLower = new THREE.Mesh(planeGeometry, planeMaterial);
         planeLower.rotation.x = Math.PI / 2;
-        planeLower.position.y = -1.1;
+        planeLower.position.y = 0;
         scene.add(planeLower);
 
         // Upper floor
