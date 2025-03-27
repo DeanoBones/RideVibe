@@ -246,7 +246,7 @@
                 emissiveIntensity: 0.8
             });
             const trailSegment = new THREE.Mesh(trailGeometry, material);
-            const offsetDown = 1; // Add the wall height offset
+            const offsetDown = .5; // Add the wall height offset
             trailSegment.position.set(position.x, position.y + trailHeight / 2 - offsetDown, position.z);
             trailSegment.rotation.y = rotation + Math.PI / 2;
             scene.add(trailSegment);
