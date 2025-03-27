@@ -54,7 +54,7 @@
         const divisions = 50;
 
         const gridHelperLower = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
-        gridHelperLower.position.y = 0;
+        gridHelperLower.position.y = -1;
         scene.add(gridHelperLower);
         const planeGeometry = new THREE.PlaneGeometry(gridSize, gridSize);
         const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x001111, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
