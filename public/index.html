@@ -54,7 +54,7 @@
         const divisions = 50;
 
         const gridHelperLower = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
-        gridHelperLower.position.y = 0;
+        gridHelperLower.position.y = -1;
         scene.add(gridHelperLower);
         const planeGeometry = new THREE.PlaneGeometry(gridSize, gridSize);
         const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x001111, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
@@ -246,7 +246,7 @@
                 emissiveIntensity: 0.8
             });
             const trailSegment = new THREE.Mesh(trailGeometry, material);
-            const offsetDown = -1; // Add the wall height offset
+            const offsetDown = 1; // Add the wall height offset
             trailSegment.position.set(position.x, position.y + trailHeight / 2 - offsetDown, position.z);
             trailSegment.rotation.y = rotation + Math.PI / 2;
             scene.add(trailSegment);
