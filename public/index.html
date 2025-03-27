@@ -239,21 +239,20 @@
             }
         }
 
-        function spawnTrailSegment(position, rotation, color, spawnTime, jumpedState = false) { // Added jumpedState parameter
-            const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-            const material = (color === colors[currentColorIndex].hex && myId) ? trailMaterial : new THREE.MeshPhongMaterial({
-                color: color,
-                emissive: color,
-                emissiveIntensity: 0.8
-            });
-            const trailSegment = new THREE.Mesh(trailGeometry, material);
-            // Set y-position based on the bike's current floor
-            const trailY = jumpedState ? 7 - 0.5 + trailHeight / 2 : -0.5 + trailHeight / 2;
-            trailSegment.position.set(position.x, trailY, position.z);
-            trailSegment.rotation.y = rotation + Math.PI / 2;
-            scene.add(trailSegment);
-            trailSegments.push({ mesh: trailSegment, spawnTime: spawnTime || performance.now() });
-        }
+        function spawnTrailSegment(position, rotation, color, spawnTime, jumpedState = false) {
+    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
+    const material = (color === colors[currentColorIndex].hex && myId) ? trailMaterial : new THREE.MeshPhongMaterial({
+        color: color,
+        emissive: color,
+        emissiveIntensity: 0.8
+    });
+    const trailSegment = new THREE.Mesh(trailGeometry, material);
+    // Use the bike's y position directly, adjusting for trail height
+    trailSegment.position.set(position.x, position.y + trailHeight / 2, position.z);
+    trailSegment.rotation.y = rotation + Math.PI / 2;
+    scene.add(trailSegment);
+    trailSegments.push({ mesh: trailSegment, spawnTime: spawnTime || performance.now() });
+}
 
         function removeOtherPlayer(id) {
             if (otherPlayers[id]) {
