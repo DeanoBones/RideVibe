@@ -247,8 +247,8 @@
         emissiveIntensity: 0.8
     });
     const trailSegment = new THREE.Mesh(trailGeometry, material);
-    // Use the bike's y position directly, adjusting for trail height
-    trailSegment.position.set(position.x, position.y + trailHeight / 2, position.z);
+    const offsetDown = 2; // Adjust this value to lower the trail more or less
+    trailSegment.position.set(position.x, position.y + trailHeight / 2 - offsetDown, position.z);
     trailSegment.rotation.y = rotation + Math.PI / 2;
     scene.add(trailSegment);
     trailSegments.push({ mesh: trailSegment, spawnTime: spawnTime || performance.now() });
