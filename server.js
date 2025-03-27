@@ -20,6 +20,7 @@ wss.on('connection', (ws) => {
                 id: data.id,
                 position: data.position,
                 rotation: data.rotation,
+                rotationZ: data.rotationZ, // Add rotationZ
                 color: data.color,
                 speed: data.speed || 6
             };
@@ -34,9 +35,12 @@ wss.on('connection', (ws) => {
                     id: data.id || id,
                     position: data.position,
                     rotation: data.rotation,
+                    rotationZ: data.rotationZ, // Add rotationZ
                     color: data.color || players[id].color,
                     speed: data.speed || players[id].speed,
-                    newTrail: data.newTrail
+                    newTrail: data.newTrail,
+                    spawnTime: data.spawnTime, // Include spawnTime for trails
+                    jumped: data.jumped // Include jumped for consistency
                 };
                 wss.clients.forEach(client => {
                     if (client.readyState === WebSocket.OPEN) {
