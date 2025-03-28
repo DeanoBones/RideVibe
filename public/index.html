@@ -281,13 +281,44 @@
             const halfGrid = gridSize / 2;
             portal.position.set(
                 Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius,
-                portalRadius, // Center of portal is 1 unit above ground
+                portalRadius,
                 Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius
             );
-            // No rotation needed - torus is naturally upright in Three.js
-            // portal.rotation.x = 0; // Default orientation is standing up
             scene.add(portal);
             return portal;
+        }
+
+        function redirectToVibeverse() {
+            const username = "player" + Math.floor(Math.random() * 1000); // Random username
+            const color = colors[currentColorIndex].css.substring(1); // Hex without #
+            const speed = currentSpeed;
+            const ref = window.location.origin; // Current game URL
+            const params = {
+                username,
+                color,
+                speed,
+                ref,
+                portal: true,
+                speed_x: currentSpeed * Math.sin(bikeModel.rotation.y),
+                speed_y: jumped ? 0 : 0,
+                speed_z: currentSpeed * Math.cos(bikeModel.rotation.y),
+                rotation_x: bikeModel.rotation.x,
+                rotation_y: bikeModel.rotation.y,
+                rotation_z: bikeModel.rotation.z
+            };
+            const queryString = new URLSearchParams(params).toString();
+            window.location.href = `http://portal.pieter.com/?${queryString}`;
+        }
+
+        function checkURLParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('portal') === 'true' && urlParams.get('color')) {
+                const incomingColor = urlParams.get('color');
+                const colorHex = parseInt(incomingColor, 16);
+                currentColorIndex = colors.findIndex(c => c.hex === colorHex);
+                if (currentColorIndex === -1) currentColorIndex = 0; // Default to cyan if color not found
+                startGame();
+            }
         }
 
         function removeOtherPlayer(id) {
@@ -450,6 +481,8 @@
             }
         });
 
+        checkURLParams(); // Check on page load
+
         function snapTo90Degrees(currentRotation) {
             const degrees = currentRotation * (180 / Math.PI);
             const snappedDegrees = Math.round(degrees / 90) * 90;
@@ -553,9 +586,7 @@
                 if (portal) {
                     const distanceToPortal = bikeModel.position.distanceTo(portal.position);
                     if (distanceToPortal < portalRadius + 0.5) {
-                        console.log("Portal reached!");
-                        scene.remove(portal);
-                        portal = null;
+                        redirectToVibeverse();
                     }
                 }
 
