@@ -100,8 +100,11 @@
         const trailDepth = 0.15;
         const trailLifetime = 5000; // 5 seconds
         const trailSpawnDistance = 1.5;
-        const trailOffset = 1; // Offset distance behind bike (adjust as needed)
+        const trailOffset = 1; // Offset behind bike
         const trails = {};
+
+        // Collision variables
+        const bikeBoundingBox = new THREE.Box3(); // Bounding box for the local player's bike
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -321,6 +324,27 @@
                     }
                     return true;
                 });
+            }
+        }
+
+        function checkCollisions() {
+            if (!bikeModel || gameOver) return;
+
+            // Update the bike's bounding box
+            bikeBoundingBox.setFromObject(bikeModel);
+
+            // Check against all trail segments
+            for (let playerId in trails) {
+                const trail = trails[playerId];
+                for (let segment of trail.segments) {
+                    const wallBox = new THREE.Box3().setFromObject(segment.mesh);
+                    if (bikeBoundingBox.intersectsBox(wallBox)) {
+                        gameOver = true;
+                        console.log("Collision detected! Game Over!");
+                        restartButton.style.display = 'block';
+                        return; // Exit early on collision
+                    }
+                }
             }
         }
 
@@ -644,10 +668,11 @@
                 }
 
                 updateLocalPlayer(deltaTime, timestamp);
+                checkCollisions();
 
                 if (checkBoundaries(bikeModel.position)) {
                     gameOver = true;
-                    console.log("Game Over!");
+                    console.log("Game Over! Out of bounds!");
                     restartButton.style.display = 'block';
                 }
 
