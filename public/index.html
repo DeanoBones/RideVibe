@@ -121,7 +121,7 @@
                 keys[event.key] = true;
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
-                if (event.key === 'ArrowUp') boostPressed = true;
+                if (event.key === 'ArrowUp'|| event.key === 'w') boostPressed = true;
                 if (event.key === ' ' && bikeModel && !gameOver) {
                     if (jumped) {
                         bikeModel.position.y = 0;
@@ -259,7 +259,7 @@
                 emissiveIntensity: 0.8
             });
             const trailSegment = new THREE.Mesh(trailGeometry, material);
-            const offsetDown = -1;
+            const offsetDown = 0.2;
             trailSegment.position.set(position.x, position.y + trailHeight / 2 - offsetDown, position.z);
             trailSegment.rotation.y = rotation + Math.PI / 2;
             scene.add(trailSegment);
