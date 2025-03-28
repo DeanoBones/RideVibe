@@ -96,10 +96,11 @@
 
         // Wall trail system variables
         const trailHeight = 2;
-        const trailWidth = 1.5; // Wider walls (was 0.1)
+        const trailWidth = 1.5;
         const trailDepth = 0.15;
         const trailLifetime = 5000; // 5 seconds
-        const trailSpawnDistance = 1.5; // Increased to match wider walls (was 0.3)
+        const trailSpawnDistance = 1.5;
+        const trailOffset = 1; // Offset distance behind bike (adjust as needed)
         const trails = {};
 
         const colors = [
@@ -287,9 +288,18 @@
 
             const trail = trails[playerId];
             const pos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
+
+            // Offset wall spawn behind the bike
+            const offsetDirection = new THREE.Vector3(
+                -Math.sin(rotation) * trailOffset,
+                0,
+                -Math.cos(rotation) * trailOffset
+            );
+            const spawnPos = pos.clone().add(offsetDirection);
+
             const lastPos = trail.lastPosition;
 
-            if (!lastPos || pos.distanceTo(lastPos) >= trailSpawnDistance) {
+            if (!lastPos || spawnPos.distanceTo(lastPos) >= trailSpawnDistance) {
                 const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
                 const trailMaterial = new THREE.MeshPhongMaterial({
                     color: color || trail.color,
@@ -297,11 +307,11 @@
                     emissiveIntensity: 0.8
                 });
                 const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                trailSegment.position.copy(pos);
+                trailSegment.position.copy(spawnPos);
                 trailSegment.rotation.y = rotation + Math.PI / 2;
                 scene.add(trailSegment);
                 trail.segments.push({ mesh: trailSegment, timestamp });
-                trail.lastPosition = pos.clone();
+                trail.lastPosition = spawnPos.clone();
 
                 // Cleanup old segments
                 trail.segments = trail.segments.filter(segment => {
