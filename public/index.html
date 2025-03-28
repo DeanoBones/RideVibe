@@ -178,7 +178,6 @@
         boostParticles.visible = false;
         scene.add(boostParticles);
 
-        // Cooldown Circle Setup
         const cooldownCanvas = document.getElementById('cooldownCircle');
         const cooldownCtx = cooldownCanvas.getContext('2d');
         cooldownCanvas.width = 40;
@@ -190,26 +189,24 @@
             const centerY = 20;
             const radius = 18;
 
-            // Background circle (empty)
             cooldownCtx.beginPath();
             cooldownCtx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
             cooldownCtx.lineWidth = 4;
-            cooldownCtx.strokeStyle = '#333333'; // Dark gray when empty
+            cooldownCtx.strokeStyle = '#333333';
             cooldownCtx.stroke();
 
-            // Fill circle based on cooldown
             const timeSinceLastBoost = timestamp - lastBoostTime;
-            let progress = Math.min(timeSinceLastBoost / boostCooldown, 1); // 0 to 1
+            let progress = Math.min(timeSinceLastBoost / boostCooldown, 1);
             if (currentSpeed === boostSpeed || jumped) {
-                progress = Math.max(1 - (timeSinceLastBoost / boostDuration), 0); // Reverse during active
+                progress = Math.max(1 - (timeSinceLastBoost / boostDuration), 0);
             }
-            const startAngle = -Math.PI / 2; // Start at top
+            const startAngle = -Math.PI / 2;
             const endAngle = startAngle + (2 * Math.PI * progress);
 
             cooldownCtx.beginPath();
             cooldownCtx.arc(centerX, centerY, radius, startAngle, endAngle);
             cooldownCtx.lineWidth = 4;
-            cooldownCtx.strokeStyle = progress === 1 ? '#00ff00' : '#00ffff'; // Green when full, cyan when filling
+            cooldownCtx.strokeStyle = progress === 1 ? '#00ff00' : '#00ffff';
             cooldownCtx.stroke();
         }
 
@@ -238,7 +235,9 @@
                     break;
                 case 'update':
                     updateOtherPlayer(data);
-                    if (data.newTrail && data.id !== myId) spawnTrailSegment(data.newTrail, data.rotation, data.color, data.spawnTime, data.jumped);
+                    if (data.newTrail && data.id !== myId) {
+                        spawnTrailSegment(data.newTrail, data.rotation, data.color, data.spawnTime, data.jumped);
+                    }
                     break;
                 case 'removePlayer':
                     removeOtherPlayer(data.id);
@@ -264,7 +263,8 @@
                             color: player.color || 0x00ffff,
                             emissive: player.color || 0x00ffff,
                             emissiveIntensity: 0.8
-                        })
+                        }),
+                        lastTrailPosition: null // Track last trail position per player
                     };
                 });
             }
@@ -299,6 +299,13 @@
             trailSegment.rotation.y = rotation + Math.PI / 2;
             scene.add(trailSegment);
             trailSegments.push({ mesh: trailSegment, spawnTime: spawnTime || performance.now() });
+        }
+
+        function shouldSpawnTrail(currentPos, lastPos) {
+            if (!lastPos) return true;
+            const dx = currentPos.x - lastPos.x;
+            const dz = currentPos.z - lastPos.z;
+            return Math.sqrt(dx * dx + dz * dz) >= trailSpawnDistance;
         }
 
         function createPortal() {
@@ -575,11 +582,26 @@
             particleMaterial.color.setHex(colors[currentColorIndex].hex);
         }
 
-        function shouldSpawnTrail(currentPos) {
-            if (!lastTrailPosition) return true;
-            const dx = currentPos.x - lastTrailPosition.x;
-            const dz = currentPos.z - lastTrailPosition.z;
-            return Math.sqrt(dx * dx + dz * dz) >= trailSpawnDistance;
+        function updateLocalPlayer(deltaTime, timestamp) {
+            let newTrail = null;
+            if (bikeModel) {
+                // Movement
+                bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
+                bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
+
+                // Trail spawning
+                if (shouldSpawnTrail(bikeModel.position, lastTrailPosition)) {
+                    const offset = new THREE.Vector3(
+                        Math.sin(bikeModel.rotation.y) * trailOffsetDistance,
+                        0,
+                        Math.cos(bikeModel.rotation.y) * trailOffsetDistance
+                    );
+                    newTrail = bikeModel.position.clone().sub(offset);
+                    spawnTrailSegment(newTrail, bikeModel.rotation.y, colors[currentColorIndex].hex, timestamp, jumped);
+                    lastTrailPosition = newTrail.clone();
+                }
+            }
+            return newTrail;
         }
 
         function animate(timestamp) {
@@ -625,9 +647,7 @@
                     }
                 }
 
-                bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
-                bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
-
+                // Update movement and trail spawning together
                 if (turnLeftPressed) {
                     bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2);
                     turnLeftPressed = false;
@@ -636,6 +656,8 @@
                     bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y - Math.PI / 2);
                     turnRightPressed = false;
                 }
+
+                const newTrail = updateLocalPlayer(deltaTime, timestamp);
 
                 trailSegments = trailSegments.filter(segment => {
                     const age = timestamp - segment.spawnTime;
@@ -659,18 +681,6 @@
                     }
                 }
 
-                let newTrail = null;
-                if (shouldSpawnTrail(bikeModel.position)) {
-                    const offset = new THREE.Vector3(
-                        Math.sin(bikeModel.rotation.y) * trailOffsetDistance,
-                        0,
-                        Math.cos(bikeModel.rotation.y) * trailOffsetDistance
-                    );
-                    newTrail = bikeModel.position.clone().sub(offset);
-                    spawnTrailSegment(newTrail, bikeModel.rotation.y, colors[currentColorIndex].hex, timestamp, jumped);
-                    lastTrailPosition = newTrail.clone();
-                }
-
                 socket.send(JSON.stringify({
                     type: 'update',
                     position: bikeModel.position,
@@ -687,7 +697,7 @@
                     updateBoostParticles(timestamp);
                 }
 
-                drawCooldownCircle(timestamp); // Update cooldown circle
+                drawCooldownCircle(timestamp);
 
                 const offset = new THREE.Vector3(0, 5, -10);
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
