@@ -115,7 +115,7 @@
         let turnLeftPressed = false;
         let turnRightPressed = false;
         let boostPressed = false;
-        let jumpPressed = false; // New flag for jump
+        let jumpPressed = false;
         let jumped = false;
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
@@ -123,7 +123,7 @@
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
                 if (event.key === 'ArrowUp' || event.key === 'w') boostPressed = true;
-                if (event.key === ' ') jumpPressed = true; // Spacebar for jump
+                if (event.key === ' ') jumpPressed = true;
             }
         });
         document.addEventListener('keyup', (event) => {
@@ -140,7 +140,7 @@
         let boostStartTime = 0;
         const boostDuration = 4000;
         const boostCooldown = 10000;
-        let lastBoostTime = -boostCooldown; // Shared cooldown for boost and jump
+        let lastBoostTime = -boostCooldown;
         let gameOver = false;
         let gameStarted = false;
         let lastTime = 0;
@@ -364,7 +364,7 @@
             turnLeftPressed = false;
             turnRightPressed = false;
             boostPressed = false;
-            jumpPressed = false; // Reset jump flag
+            jumpPressed = false;
             jumped = false;
             boostParticles.visible = false;
             spawnPortalButton.style.display = 'none';
@@ -519,7 +519,7 @@
             const positions = boostParticles.geometry.attributes.position.array;
             const offset = new THREE.Vector3(
                 -Math.sin(bikeModel.rotation.y) * 2,
-                0.5,
+                jumped ? 7.5 : 0.5, // Adjust height based on jump state
                 -Math.cos(bikeModel.rotation.y) * 2
             );
             const bikePos = bikeModel.position.clone().add(offset);
@@ -566,6 +566,7 @@
                         jumped = true;
                         boostStartTime = timestamp;
                         lastBoostTime = timestamp;
+                        activateBoostParticles(); // Call particles for jump
                         jumpPressed = false;
                     }
                 }
@@ -639,7 +640,7 @@
                     jumped: jumped
                 }));
 
-                if (currentSpeed === boostSpeed) {
+                if (currentSpeed === boostSpeed || jumped) { // Update particles for both boost and jump
                     updateBoostParticles(timestamp);
                 }
 
