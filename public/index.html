@@ -42,8 +42,8 @@
             position: absolute;
             bottom: 20px;
             right: 20px;
-            width: 40px;
-            height: 40px;
+            width: 100px;
+            height: 100px;
         }
     </style>
 </head>
@@ -236,11 +236,7 @@
                 case 'update':
                     updateOtherPlayer(data);
                     if (data.newTrail && data.id !== myId) {
-                        const other = otherPlayers[data.id];
-                        if (other && shouldSpawnTrail(new THREE.Vector3(data.newTrail.x, data.newTrail.y, data.newTrail.z), other.lastTrailPosition)) {
-                            spawnTrailSegment(data.newTrail, data.rotation, data.color, data.spawnTime, data.jumped);
-                            other.lastTrailPosition = new THREE.Vector3(data.newTrail.x, data.newTrail.y, data.newTrail.z);
-                        }
+                        spawnTrailSegment(data.newTrail, data.rotation, data.color, data.spawnTime, data.jumped);
                     }
                     break;
                 case 'removePlayer':
@@ -268,7 +264,7 @@
                             emissive: player.color || 0x00ffff,
                             emissiveIntensity: 0.8
                         }),
-                        lastTrailPosition: player.position ? new THREE.Vector3(player.position.x, player.position.y, player.position.z) : null
+                        lastTrailPosition: null // Track last trail position per player
                     };
                 });
             }
@@ -488,12 +484,6 @@
                 });
                 trailMaterial.color.setHex(startColor);
                 trailMaterial.emissive.setHex(startColor);
-
-                // Spawn initial trail segment at start
-                const initialTrail = bikeModel.position.clone();
-                spawnTrailSegment(initialTrail, bikeModel.rotation.y, startColor, performance.now(), jumped);
-                lastTrailPosition = initialTrail.clone();
-
                 socket.send(JSON.stringify({
                     type: 'start',
                     id: myId,
@@ -501,8 +491,7 @@
                     rotation: bikeModel.rotation.y,
                     rotationZ: bikeModel.rotation.z,
                     color: startColor,
-                    speed: currentSpeed,
-                    newTrail: initialTrail
+                    speed: currentSpeed
                 }));
                 animate(0);
             });
@@ -596,9 +585,11 @@
         function updateLocalPlayer(deltaTime, timestamp) {
             let newTrail = null;
             if (bikeModel) {
+                // Movement
                 bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
                 bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
 
+                // Trail spawning
                 if (shouldSpawnTrail(bikeModel.position, lastTrailPosition)) {
                     const offset = new THREE.Vector3(
                         Math.sin(bikeModel.rotation.y) * trailOffsetDistance,
@@ -626,6 +617,7 @@
                 const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60;
                 lastTime = timestamp;
 
+                // Handle boost or jump with shared cooldown
                 if (timestamp - lastBoostTime >= boostCooldown) {
                     if (boostPressed && currentSpeed === baseSpeed) {
                         currentSpeed = boostSpeed;
@@ -644,6 +636,7 @@
                     }
                 }
 
+                // Reset boost or jump state after duration
                 if ((currentSpeed === boostSpeed || jumped) && timestamp - boostStartTime >= boostDuration) {
                     currentSpeed = baseSpeed;
                     boostParticles.visible = false;
@@ -654,6 +647,7 @@
                     }
                 }
 
+                // Update movement and trail spawning together
                 if (turnLeftPressed) {
                     bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2);
                     turnLeftPressed = false;
@@ -665,7 +659,7 @@
 
                 const newTrail = updateLocalPlayer(deltaTime, timestamp);
 
-                trail Segments = trailSegments.filter(segment => {
+                trailSegments = trailSegments.filter(segment => {
                     const age = timestamp - segment.spawnTime;
                     if (age > trailLifetime) {
                         scene.remove(segment.mesh);
@@ -693,7 +687,7 @@
                     rotation: bikeModel.rotation.y,
                     rotationZ: bikeModel.rotation.z,
                     speed: currentSpeed,
-                    newTrail: newTrail ? { x: newTrail.x, y: newTrail.y, z: newTrail.z } : null,
+                    newTrail: newTrail,
                     color: colors[currentColorIndex].hex,
                     spawnTime: timestamp,
                     jumped: jumped
