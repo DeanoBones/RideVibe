@@ -38,6 +38,13 @@
             right: 10px;
             display: none;
         }
+        #cooldownCircle {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+        }
     </style>
 </head>
 <body>
@@ -45,6 +52,7 @@
     <button id="colorButton">Change Color</button>
     <button id="restartButton">Restart</button>
     <button id="spawnPortalButton">Spawn Vibeverse Portal</button>
+    <canvas id="cooldownCircle"></canvas>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
     <script>
@@ -146,7 +154,6 @@
         let lastTime = 0;
         let animationFrameId = null;
 
-        // Boost/Jump Action Particles
         let boostParticles;
         const particleCount = 50;
         const particles = new THREE.BufferGeometry();
@@ -171,29 +178,40 @@
         boostParticles.visible = false;
         scene.add(boostParticles);
 
-        // Readiness Particles
-        let readyParticles;
-        const readyParticleCount = 20; // Fewer particles for a subtler effect
-        const readyParticlesGeom = new THREE.BufferGeometry();
-        const readyParticlePositions = new Float32Array(readyParticleCount * 3);
-        const readyParticleVelocities = new Float32Array(readyParticleCount * 3);
-        for (let i = 0; i < readyParticleCount; i++) {
-            readyParticlePositions[i * 3] = (Math.random() - 0.5) * 2; // Small radius around bike
-            readyParticlePositions[i * 3 + 1] = Math.random() * 0.5; // Low height
-            readyParticlePositions[i * 3 + 2] = (Math.random() - 0.5) * 2;
-            readyParticleVelocities[i * 3] = (Math.random() - 0.5) * 0.1; // Slow movement
-            readyParticleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 0.1;
-            readyParticleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 0.1;
+        // Cooldown Circle Setup
+        const cooldownCanvas = document.getElementById('cooldownCircle');
+        const cooldownCtx = cooldownCanvas.getContext('2d');
+        cooldownCanvas.width = 40;
+        cooldownCanvas.height = 40;
+
+        function drawCooldownCircle(timestamp) {
+            cooldownCtx.clearRect(0, 0, 40, 40);
+            const centerX = 20;
+            const centerY = 20;
+            const radius = 18;
+
+            // Background circle (empty)
+            cooldownCtx.beginPath();
+            cooldownCtx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            cooldownCtx.lineWidth = 4;
+            cooldownCtx.strokeStyle = '#333333'; // Dark gray when empty
+            cooldownCtx.stroke();
+
+            // Fill circle based on cooldown
+            const timeSinceLastBoost = timestamp - lastBoostTime;
+            let progress = Math.min(timeSinceLastBoost / boostCooldown, 1); // 0 to 1
+            if (currentSpeed === boostSpeed || jumped) {
+                progress = Math.max(1 - (timeSinceLastBoost / boostDuration), 0); // Reverse during active
+            }
+            const startAngle = -Math.PI / 2; // Start at top
+            const endAngle = startAngle + (2 * Math.PI * progress);
+
+            cooldownCtx.beginPath();
+            cooldownCtx.arc(centerX, centerY, radius, startAngle, endAngle);
+            cooldownCtx.lineWidth = 4;
+            cooldownCtx.strokeStyle = progress === 1 ? '#00ff00' : '#00ffff'; // Green when full, cyan when filling
+            cooldownCtx.stroke();
         }
-        readyParticlesGeom.setAttribute('position', new THREE.BufferAttribute(readyParticlePositions, 3));
-        const readyParticleMaterial = new THREE.PointsMaterial({
-            color: 0x00ffff, // Cyan to match theme, adjustable
-            size: 0.1, // Smaller than boost particles
-            transparent: true,
-            opacity: 0.5 // Faint effect
-        });
-        readyParticles = new THREE.Points(readyParticlesGeom, readyParticleMaterial);
-        scene.add(readyParticles);
 
         const socket = new WebSocket(`wss://${window.location.host}`);
         let myId;
@@ -392,7 +410,6 @@
             jumpPressed = false;
             jumped = false;
             boostParticles.visible = false;
-            readyParticles.visible = true; // Show readiness particles on reset
             spawnPortalButton.style.display = 'none';
         }
 
@@ -558,29 +575,6 @@
             particleMaterial.color.setHex(colors[currentColorIndex].hex);
         }
 
-        function updateReadyParticles(timestamp) {
-            if (!readyParticles.visible || !bikeModel) return;
-            const positions = readyParticlesGeom.attributes.position.array;
-            const velocities = readyParticleVelocities;
-            const bikePos = bikeModel.position;
-            for (let i = 0; i < readyParticleCount; i++) {
-                positions[i * 3] += velocities[i * 3];
-                positions[i * 3 + 1] += velocities[i * 3 + 1];
-                positions[i * 3 + 2] += velocities[i * 3 + 2];
-                // Keep particles near bike
-                const dx = positions[i * 3] - bikePos.x;
-                const dy = positions[i * 3 + 1] - (bikePos.y + 0.5);
-                const dz = positions[i * 3 + 2] - bikePos.z;
-                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (distance > 2) { // Reset if too far
-                    positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 2;
-                    positions[i * 3 + 1] = bikePos.y + Math.random() * 0.5;
-                    positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 2;
-                }
-            }
-            readyParticlesGeom.attributes.position.needsUpdate = true;
-        }
-
         function shouldSpawnTrail(currentPos) {
             if (!lastTrailPosition) return true;
             const dx = currentPos.x - lastTrailPosition.x;
@@ -603,13 +597,11 @@
 
                 // Handle boost or jump with shared cooldown
                 if (timestamp - lastBoostTime >= boostCooldown) {
-                    readyParticles.visible = true; // Show readiness particles when off cooldown
                     if (boostPressed && currentSpeed === baseSpeed) {
                         currentSpeed = boostSpeed;
                         boostStartTime = timestamp;
                         lastBoostTime = timestamp;
                         activateBoostParticles();
-                        readyParticles.visible = false; // Hide readiness during action
                         boostPressed = false;
                     } else if (jumpPressed && !jumped) {
                         bikeModel.position.y = 7;
@@ -618,11 +610,8 @@
                         boostStartTime = timestamp;
                         lastBoostTime = timestamp;
                         activateBoostParticles();
-                        readyParticles.visible = false; // Hide readiness during action
                         jumpPressed = false;
                     }
-                } else {
-                    readyParticles.visible = false; // Hide during cooldown
                 }
 
                 // Reset boost or jump state after duration
@@ -697,7 +686,8 @@
                 if (currentSpeed === boostSpeed || jumped) {
                     updateBoostParticles(timestamp);
                 }
-                updateReadyParticles(timestamp); // Update readiness particles
+
+                drawCooldownCircle(timestamp); // Update cooldown circle
 
                 const offset = new THREE.Vector3(0, 5, -10);
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
