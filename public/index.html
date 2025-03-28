@@ -281,10 +281,11 @@
             const halfGrid = gridSize / 2;
             portal.position.set(
                 Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius,
-                portalRadius, // Position at ground level, raised by radius to sit on floor
+                portalRadius, // Center of portal is 1 unit above ground
                 Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius
             );
-            portal.rotation.x = Math.PI / 2; // Stands upright
+            // No rotation needed - torus is naturally upright in Three.js
+            // portal.rotation.x = 0; // Default orientation is standing up
             scene.add(portal);
             return portal;
         }
