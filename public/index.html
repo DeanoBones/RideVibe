@@ -280,6 +280,20 @@
             }
         }
 
+        function spawnWall(position, rotation, color, timestamp) {
+            const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
+            const trailMaterial = new THREE.MeshPhongMaterial({
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.8
+            });
+            const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
+            trailSegment.position.copy(position);
+            trailSegment.rotation.y = rotation + Math.PI / 2;
+            scene.add(trailSegment);
+            trails[myId].segments.push({ mesh: trailSegment, timestamp: timestamp });
+        }
+
         function updateTrail(playerId, position, rotation, color, jumped, timestamp) {
             if (!trails[playerId]) {
                 if (playerId === myId && bikeModel) {
@@ -516,6 +530,11 @@
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(startColor);
                 });
+
+                // Initialize trail and spawn starting wall
+                trails[myId] = { segments: [], lastPosition: bikeModel.position.clone(), pendingWalls: [], color: startColor };
+                spawnWall(bikeModel.position.clone(), bikeModel.rotation.y, startColor, performance.now());
+
                 socket.send(JSON.stringify({
                     type: 'start',
                     id: myId,
