@@ -258,7 +258,7 @@
                     });
                     scene.add(otherBike);
                     otherPlayers[player.id] = { model: otherBike };
-                    trails[player.id] = { segments: [], lastPosition: null, lastRotation: null, color: player.color || 0x00ffff };
+                    trails[player.id] = { segments: [], lastPosition: null, color: player.color || 0x00ffff };
                 });
             }
         }
@@ -280,42 +280,10 @@
             }
         }
 
-        function createLShapeGeometry(oldRotation, newRotation) {
-            const vertices = new Float32Array([
-                // Horizontal part (along old direction)
-                -trailWidth / 2, -trailHeight / 2, 0,
-                trailWidth / 2, -trailHeight / 2, 0,
-                trailWidth / 2, trailHeight / 2, 0,
-                -trailWidth / 2, trailHeight / 2, 0,
-                // Vertical part (along new direction)
-                trailWidth / 2, -trailHeight / 2, 0,
-                trailWidth / 2, -trailHeight / 2, -trailWidth,
-                trailWidth / 2, trailHeight / 2, -trailWidth,
-                trailWidth / 2, trailHeight / 2, 0
-            ]);
-            const indices = [
-                0, 1, 2, 0, 2, 3, // Horizontal face
-                4, 5, 6, 4, 6, 7  // Vertical face
-            ];
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-            geometry.setIndex(indices);
-            geometry.computeVertexNormals();
-
-            // Adjust based on turn direction (left or right)
-            const turnAngle = newRotation - oldRotation;
-            if (turnAngle === Math.PI / 2 || turnAngle === -3 * Math.PI / 2) {
-                // Left turn: Flip vertical part to positive x
-                vertices[12] = -trailWidth / 2; vertices[15] = -trailWidth / 2;
-                vertices[18] = -trailWidth / 2; vertices[21] = -trailWidth / 2;
-            }
-            return geometry;
-        }
-
         function updateTrail(playerId, position, rotation, color, jumped, timestamp) {
             if (!trails[playerId]) {
                 if (playerId === myId && bikeModel) {
-                    trails[playerId] = { segments: [], lastPosition: null, lastRotation: null, color: colors[currentColorIndex].hex };
+                    trails[playerId] = { segments: [], lastPosition: null, color: colors[currentColorIndex].hex };
                 } else {
                     return;
                 }
@@ -323,8 +291,6 @@
 
             const trail = trails[playerId];
             const pos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
-            const lastPos = trail.lastPosition;
-            const lastRotation = trail.lastRotation;
 
             // Offset wall spawn behind the bike
             const offsetDirection = new THREE.Vector3(
@@ -334,38 +300,21 @@
             );
             const spawnPos = pos.clone().add(offsetDirection);
 
+            const lastPos = trail.lastPosition;
+
             if (!lastPos || spawnPos.distanceTo(lastPos) >= trailSpawnDistance) {
-                let trailGeometry, trailSegment;
-
-                // Check for turn
-                if (lastRotation !== null && rotation !== lastRotation && Math.abs(rotation - lastRotation) === Math.PI / 2) {
-                    // Spawn L-shaped wall for turn
-                    trailGeometry = createLShapeGeometry(lastRotation, rotation);
-                    const trailMaterial = new THREE.MeshPhongMaterial({
-                        color: color || trail.color,
-                        emissive: color || trail.color,
-                        emissiveIntensity: 0.8
-                    });
-                    trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                    trailSegment.position.copy(lastPos); // Anchor at last position
-                    trailSegment.rotation.y = lastRotation + Math.PI / 2; // Align with old direction
-                } else {
-                    // Normal straight wall
-                    trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-                    const trailMaterial = new THREE.MeshPhongMaterial({
-                        color: color || trail.color,
-                        emissive: color || trail.color,
-                        emissiveIntensity: 0.8
-                    });
-                    trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                    trailSegment.position.copy(spawnPos);
-                    trailSegment.rotation.y = rotation + Math.PI / 2;
-                }
-
+                const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
+                const trailMaterial = new THREE.MeshPhongMaterial({
+                    color: color || trail.color,
+                    emissive: color || trail.color,
+                    emissiveIntensity: 0.8
+                });
+                const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
+                trailSegment.position.copy(spawnPos);
+                trailSegment.rotation.y = rotation + Math.PI / 2;
                 scene.add(trailSegment);
                 trail.segments.push({ mesh: trailSegment, timestamp });
                 trail.lastPosition = spawnPos.clone();
-                trail.lastRotation = rotation;
 
                 // Cleanup old segments
                 trail.segments = trail.segments.filter(segment => {
