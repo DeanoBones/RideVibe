@@ -146,6 +146,7 @@
         let lastTime = 0;
         let animationFrameId = null;
 
+        // Boost/Jump Action Particles
         let boostParticles;
         const particleCount = 50;
         const particles = new THREE.BufferGeometry();
@@ -169,6 +170,30 @@
         boostParticles = new THREE.Points(particles, particleMaterial);
         boostParticles.visible = false;
         scene.add(boostParticles);
+
+        // Readiness Particles
+        let readyParticles;
+        const readyParticleCount = 20; // Fewer particles for a subtler effect
+        const readyParticlesGeom = new THREE.BufferGeometry();
+        const readyParticlePositions = new Float32Array(readyParticleCount * 3);
+        const readyParticleVelocities = new Float32Array(readyParticleCount * 3);
+        for (let i = 0; i < readyParticleCount; i++) {
+            readyParticlePositions[i * 3] = (Math.random() - 0.5) * 2; // Small radius around bike
+            readyParticlePositions[i * 3 + 1] = Math.random() * 0.5; // Low height
+            readyParticlePositions[i * 3 + 2] = (Math.random() - 0.5) * 2;
+            readyParticleVelocities[i * 3] = (Math.random() - 0.5) * 0.1; // Slow movement
+            readyParticleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 0.1;
+            readyParticleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 0.1;
+        }
+        readyParticlesGeom.setAttribute('position', new THREE.BufferAttribute(readyParticlePositions, 3));
+        const readyParticleMaterial = new THREE.PointsMaterial({
+            color: 0x00ffff, // Cyan to match theme, adjustable
+            size: 0.1, // Smaller than boost particles
+            transparent: true,
+            opacity: 0.5 // Faint effect
+        });
+        readyParticles = new THREE.Points(readyParticlesGeom, readyParticleMaterial);
+        scene.add(readyParticles);
 
         const socket = new WebSocket(`wss://${window.location.host}`);
         let myId;
@@ -367,6 +392,7 @@
             jumpPressed = false;
             jumped = false;
             boostParticles.visible = false;
+            readyParticles.visible = true; // Show readiness particles on reset
             spawnPortalButton.style.display = 'none';
         }
 
@@ -519,7 +545,7 @@
             const positions = boostParticles.geometry.attributes.position.array;
             const offset = new THREE.Vector3(
                 -Math.sin(bikeModel.rotation.y) * 2,
-                jumped ? 7.5 : 0.5, // Adjust height based on jump state
+                jumped ? 7.5 : 0.5,
                 -Math.cos(bikeModel.rotation.y) * 2
             );
             const bikePos = bikeModel.position.clone().add(offset);
@@ -530,6 +556,29 @@
             }
             boostParticles.geometry.attributes.position.needsUpdate = true;
             particleMaterial.color.setHex(colors[currentColorIndex].hex);
+        }
+
+        function updateReadyParticles(timestamp) {
+            if (!readyParticles.visible || !bikeModel) return;
+            const positions = readyParticlesGeom.attributes.position.array;
+            const velocities = readyParticleVelocities;
+            const bikePos = bikeModel.position;
+            for (let i = 0; i < readyParticleCount; i++) {
+                positions[i * 3] += velocities[i * 3];
+                positions[i * 3 + 1] += velocities[i * 3 + 1];
+                positions[i * 3 + 2] += velocities[i * 3 + 2];
+                // Keep particles near bike
+                const dx = positions[i * 3] - bikePos.x;
+                const dy = positions[i * 3 + 1] - (bikePos.y + 0.5);
+                const dz = positions[i * 3 + 2] - bikePos.z;
+                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (distance > 2) { // Reset if too far
+                    positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 2;
+                    positions[i * 3 + 1] = bikePos.y + Math.random() * 0.5;
+                    positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 2;
+                }
+            }
+            readyParticlesGeom.attributes.position.needsUpdate = true;
         }
 
         function shouldSpawnTrail(currentPos) {
@@ -554,11 +603,13 @@
 
                 // Handle boost or jump with shared cooldown
                 if (timestamp - lastBoostTime >= boostCooldown) {
+                    readyParticles.visible = true; // Show readiness particles when off cooldown
                     if (boostPressed && currentSpeed === baseSpeed) {
                         currentSpeed = boostSpeed;
                         boostStartTime = timestamp;
                         lastBoostTime = timestamp;
                         activateBoostParticles();
+                        readyParticles.visible = false; // Hide readiness during action
                         boostPressed = false;
                     } else if (jumpPressed && !jumped) {
                         bikeModel.position.y = 7;
@@ -566,9 +617,12 @@
                         jumped = true;
                         boostStartTime = timestamp;
                         lastBoostTime = timestamp;
-                        activateBoostParticles(); // Call particles for jump
+                        activateBoostParticles();
+                        readyParticles.visible = false; // Hide readiness during action
                         jumpPressed = false;
                     }
+                } else {
+                    readyParticles.visible = false; // Hide during cooldown
                 }
 
                 // Reset boost or jump state after duration
@@ -640,9 +694,10 @@
                     jumped: jumped
                 }));
 
-                if (currentSpeed === boostSpeed || jumped) { // Update particles for both boost and jump
+                if (currentSpeed === boostSpeed || jumped) {
                     updateBoostParticles(timestamp);
                 }
+                updateReadyParticles(timestamp); // Update readiness particles
 
                 const offset = new THREE.Vector3(0, 5, -10);
                 const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
