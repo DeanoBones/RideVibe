@@ -100,7 +100,7 @@
         const trailDepth = 0.15;
         const trailLifetime = 15000; // 15 seconds
         const trailSpawnDistance = 1.5;
-        const trailDelay = 1000; // 1 second delay in milliseconds
+        const trailOffset = 2.5; // Offset behind bike
         const trails = {};
 
         // Collision variables
@@ -258,7 +258,7 @@
                     });
                     scene.add(otherBike);
                     otherPlayers[player.id] = { model: otherBike };
-                    trails[player.id] = { segments: [], lastPosition: null, pendingWalls: [], color: player.color || 0x00ffff };
+                    trails[player.id] = { segments: [], lastPosition: null, color: player.color || 0x00ffff };
                 });
             }
         }
@@ -280,24 +280,10 @@
             }
         }
 
-        function spawnWall(position, rotation, color, timestamp) {
-            const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-            const trailMaterial = new THREE.MeshPhongMaterial({
-                color: color,
-                emissive: color,
-                emissiveIntensity: 0.8
-            });
-            const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-            trailSegment.position.copy(position);
-            trailSegment.rotation.y = rotation + Math.PI / 2;
-            scene.add(trailSegment);
-            trails[myId].segments.push({ mesh: trailSegment, timestamp: timestamp });
-        }
-
         function updateTrail(playerId, position, rotation, color, jumped, timestamp) {
             if (!trails[playerId]) {
                 if (playerId === myId && bikeModel) {
-                    trails[playerId] = { segments: [], lastPosition: null, pendingWalls: [], color: colors[currentColorIndex].hex };
+                    trails[playerId] = { segments: [], lastPosition: null, color: colors[currentColorIndex].hex };
                 } else {
                     return;
                 }
@@ -305,46 +291,40 @@
 
             const trail = trails[playerId];
             const pos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
+
+            // Offset wall spawn behind the bike
+            const offsetDirection = new THREE.Vector3(
+                -Math.sin(rotation) * trailOffset,
+                0,
+                -Math.cos(rotation) * trailOffset
+            );
+            const spawnPos = pos.clone().add(offsetDirection);
+
             const lastPos = trail.lastPosition;
 
-            // Queue wall spawn if distance condition is met
-            if (!lastPos || pos.distanceTo(lastPos) >= trailSpawnDistance) {
-                trail.pendingWalls.push({
-                    position: pos.clone(),
-                    rotation: rotation,
+            if (!lastPos || spawnPos.distanceTo(lastPos) >= trailSpawnDistance) {
+                const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
+                const trailMaterial = new THREE.MeshPhongMaterial({
                     color: color || trail.color,
-                    spawnTime: timestamp + trailDelay
+                    emissive: color || trail.color,
+                    emissiveIntensity: 0.8
                 });
-                trail.lastPosition = pos.clone();
+                const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
+                trailSegment.position.copy(spawnPos);
+                trailSegment.rotation.y = rotation + Math.PI / 2;
+                scene.add(trailSegment);
+                trail.segments.push({ mesh: trailSegment, timestamp });
+                trail.lastPosition = spawnPos.clone();
+
+                // Cleanup old segments
+                trail.segments = trail.segments.filter(segment => {
+                    if (timestamp - segment.timestamp > trailLifetime) {
+                        scene.remove(segment.mesh);
+                        return false;
+                    }
+                    return true;
+                });
             }
-
-            // Spawn any pending walls whose delay has elapsed
-            trail.pendingWalls = trail.pendingWalls.filter(wall => {
-                if (timestamp >= wall.spawnTime) {
-                    const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-                    const trailMaterial = new THREE.MeshPhongMaterial({
-                        color: wall.color,
-                        emissive: wall.color,
-                        emissiveIntensity: 0.8
-                    });
-                    const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                    trailSegment.position.copy(wall.position);
-                    trailSegment.rotation.y = wall.rotation + Math.PI / 2;
-                    scene.add(trailSegment);
-                    trail.segments.push({ mesh: trailSegment, timestamp: timestamp });
-                    return false; // Remove from pending
-                }
-                return true; // Keep in pending
-            });
-
-            // Cleanup old segments
-            trail.segments = trail.segments.filter(segment => {
-                if (timestamp - segment.timestamp > trailLifetime) {
-                    scene.remove(segment.mesh);
-                    return false;
-                }
-                return true;
-            });
         }
 
         function checkCollisions() {
@@ -530,11 +510,6 @@
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(startColor);
                 });
-
-                // Initialize trail and spawn starting wall
-                trails[myId] = { segments: [], lastPosition: bikeModel.position.clone(), pendingWalls: [], color: startColor };
-                spawnWall(bikeModel.position.clone(), bikeModel.rotation.y, startColor, performance.now());
-
                 socket.send(JSON.stringify({
                     type: 'start',
                     id: myId,
