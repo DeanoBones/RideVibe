@@ -267,26 +267,49 @@
         }
 
         function createPortal() {
-            if (portal) {
-                scene.remove(portal);
-            }
-            const portalGeometry = new THREE.TorusGeometry(portalRadius, 0.2, 16, 100);
-            const portalMaterial = new THREE.MeshPhongMaterial({
-                color: 0x00ff00,
-                emissive: 0x00ff00,
-                emissiveIntensity: 1,
-                side: THREE.DoubleSide
-            });
-            portal = new THREE.Mesh(portalGeometry, portalMaterial);
-            const halfGrid = gridSize / 2;
-            portal.position.set(
-                Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius,
-                portalRadius,
-                Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius
-            );
-            scene.add(portal);
-            return portal;
-        }
+    if (portal) {
+        scene.remove(portal);
+    }
+
+    // Create a group to hold both the filled circle and the glowing rim
+    portal = new THREE.Group();
+
+    // Filled circle (main portal surface)
+    const portalGeometry = new THREE.CircleGeometry(portalRadius, 32);
+    const portalMaterial = new THREE.MeshPhongMaterial({
+        color: 0x111111,          // Dark gray base color (almost black, Tron-like)
+        emissive: 0x00ff00,       // Neon green glow
+        emissiveIntensity: 1.5,   // Strong glow
+        transparent: true,        // Slight transparency for holographic effect
+        opacity: 0.7,             // Semi-translucent
+        side: THREE.DoubleSide
+    });
+    const portalDisc = new THREE.Mesh(portalGeometry, portalMaterial);
+    portalDisc.rotation.x = Math.PI / 2; // Face upward
+    portal.add(portalDisc);
+
+    // Glowing rim (outline)
+    const rimGeometry = new THREE.TorusGeometry(portalRadius, 0.05, 16, 100); // Thin ring
+    const rimMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ff00,          // Bright neon green
+        emissive: 0x00ff00,       // Glow (MeshBasicMaterial doesn't use emissive, but color acts as glow)
+        emissiveIntensity: 2.0,   // High intensity for rim glow
+        side: THREE.DoubleSide
+    });
+    const portalRim = new THREE.Mesh(rimGeometry, rimMaterial);
+    portalRim.rotation.x = Math.PI / 2; // Align with the disc
+    portal.add(portalRim);
+
+    // Position the portal group
+    const halfGrid = gridSize / 2;
+    portal.position.set(
+        Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius,
+        portalRadius,
+        Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius
+    );
+    scene.add(portal);
+    return portal;
+}
 
         function redirectToVibeverse() {
             const username = "player" + Math.floor(Math.random() * 1000); // Random username
