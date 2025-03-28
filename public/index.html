@@ -10,23 +10,32 @@
             width: 100%;
             height: 100vh;
         }
-        #startButton, #colorButton, #restartButton {
+        #startButton, #colorButton, #restartButton, #spawnPortalButton {
             position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
         }
         #startButton {
+            left: 50%;
             top: 45%;
+            transform: translateX(-50%);
         }
         #colorButton {
+            left: 50%;
             top: 50%;
+            transform: translateX(-50%);
             transition: background-color 0.3s;
         }
         #restartButton {
+            left: 50%;
             top: 50%;
+            transform: translateX(-50%);
+            display: none;
+        }
+        #spawnPortalButton {
+            top: 10px;
+            right: 10px;
             display: none;
         }
     </style>
@@ -35,6 +44,7 @@
     <button id="startButton">Start</button>
     <button id="colorButton">Change Color</button>
     <button id="restartButton">Restart</button>
+    <button id="spawnPortalButton">Spawn Exit Portal</button>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
     <script>
@@ -82,6 +92,9 @@
         const trailSpawnDistance = 1;
         const trailLifetime = 10000;
         const trailOffsetDistance = 1;
+
+        let portal = null;
+        const portalRadius = 1;
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -246,11 +259,34 @@
                 emissiveIntensity: 0.8
             });
             const trailSegment = new THREE.Mesh(trailGeometry, material);
-            const offsetDown = 1; // Add the wall height offset
+            const offsetDown = 1;
             trailSegment.position.set(position.x, position.y + trailHeight / 2 - offsetDown, position.z);
             trailSegment.rotation.y = rotation + Math.PI / 2;
             scene.add(trailSegment);
             trailSegments.push({ mesh: trailSegment, spawnTime: spawnTime || performance.now() });
+        }
+
+        function createPortal() {
+            if (portal) {
+                scene.remove(portal);
+            }
+            const portalGeometry = new THREE.TorusGeometry(portalRadius, 0.2, 16, 100);
+            const portalMaterial = new THREE.MeshPhongMaterial({
+                color: 0x00ff00,
+                emissive: 0x00ff00,
+                emissiveIntensity: 1,
+                side: THREE.DoubleSide
+            });
+            portal = new THREE.Mesh(portalGeometry, portalMaterial);
+            const halfGrid = gridSize / 2;
+            portal.position.set(
+                Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius,
+                Math.random() * 7,
+                Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius
+            );
+            portal.rotation.x = Math.PI / 2;
+            scene.add(portal);
+            return portal;
         }
 
         function removeOtherPlayer(id) {
@@ -268,6 +304,10 @@
             trailSegments.forEach(segment => scene.remove(segment.mesh));
             trailSegments = [];
             lastTrailPosition = null;
+            if (portal) {
+                scene.remove(portal);
+                portal = null;
+            }
             gameOver = false;
             gameStarted = false;
             currentSpeed = baseSpeed;
@@ -286,6 +326,7 @@
             boostPressed = false;
             jumped = false;
             boostParticles.visible = false;
+            spawnPortalButton.style.display = 'none';
         }
 
         window.addEventListener('resize', () => {
@@ -319,6 +360,8 @@
         const startButton = document.getElementById('startButton');
         const colorButton = document.getElementById('colorButton');
         const restartButton = document.getElementById('restartButton');
+        const spawnPortalButton = document.getElementById('spawnPortalButton');
+
         startButton.addEventListener('click', () => {
             if (!gameStarted) {
                 startGame();
@@ -330,6 +373,7 @@
             startButton.style.display = 'none';
             colorButton.style.display = 'none';
             restartButton.style.display = 'none';
+            spawnPortalButton.style.display = 'block';
             
             loader.load('./models/bike/scene.gltf', (gltf) => {
                 bikeModel = gltf.scene;
@@ -397,6 +441,12 @@
         restartButton.addEventListener('click', () => {
             resetGame();
             setTimeout(startGame, 50);
+        });
+
+        spawnPortalButton.addEventListener('click', () => {
+            if (gameStarted && !gameOver) {
+                createPortal();
+            }
         });
 
         function snapTo90Degrees(currentRotation) {
@@ -497,6 +547,15 @@
                     gameOver = true;
                     console.log("Game Over!");
                     restartButton.style.display = 'block';
+                }
+
+                if (portal) {
+                    const distanceToPortal = bikeModel.position.distanceTo(portal.position);
+                    if (distanceToPortal < portalRadius + 0.5) {
+                        console.log("Portal reached!");
+                        scene.remove(portal);
+                        portal = null;
+                    }
                 }
 
                 let newTrail = null;
