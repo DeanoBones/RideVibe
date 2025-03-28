@@ -115,31 +115,23 @@
         let turnLeftPressed = false;
         let turnRightPressed = false;
         let boostPressed = false;
+        let jumpPressed = false; // New flag for jump
         let jumped = false;
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
                 if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
                 if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
-                if (event.key === 'ArrowUp'|| event.key === 'w') boostPressed = true;
-                if (event.key === ' ' && bikeModel && !gameOver) {
-                    if (jumped) {
-                        bikeModel.position.y = 0;
-                        bikeModel.rotation.z = 0;
-                        jumped = false;
-                    } else {
-                        bikeModel.position.y = 7;
-                        bikeModel.rotation.z = Math.PI;
-                        jumped = true;
-                    }
-                }
+                if (event.key === 'ArrowUp' || event.key === 'w') boostPressed = true;
+                if (event.key === ' ') jumpPressed = true; // Spacebar for jump
             }
         });
         document.addEventListener('keyup', (event) => {
             keys[event.key] = false;
             if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = false;
             if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = false;
-            if (event.key === 'ArrowUp'|| event.key === 'w') boostPressed = false;
+            if (event.key === 'ArrowUp' || event.key === 'w') boostPressed = false;
+            if (event.key === ' ') jumpPressed = false;
         });
 
         const baseSpeed = 6;
@@ -148,7 +140,7 @@
         let boostStartTime = 0;
         const boostDuration = 4000;
         const boostCooldown = 10000;
-        let lastBoostTime = -boostCooldown;
+        let lastBoostTime = -boostCooldown; // Shared cooldown for boost and jump
         let gameOver = false;
         let gameStarted = false;
         let lastTime = 0;
@@ -267,55 +259,48 @@
         }
 
         function createPortal() {
-    if (portal) {
-        scene.remove(portal);
-    }
+            if (portal) {
+                scene.remove(portal);
+            }
 
-    // Create a group to hold both the filled center and the torus rim
-    portal = new THREE.Group();
+            portal = new THREE.Group();
+            const portalGeometry = new THREE.CircleGeometry(portalRadius, 32);
+            const portalMaterial = new THREE.MeshPhongMaterial({
+                color: 0x111111,
+                emissive: 0x00ff00,
+                emissiveIntensity: 1.5,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            const portalDisc = new THREE.Mesh(portalGeometry, portalMaterial);
+            portal.add(portalDisc);
 
-    // Filled center (inside the torus)
-    const portalGeometry = new THREE.CircleGeometry(portalRadius, 32); // Match the torus radius
-    const portalMaterial = new THREE.MeshPhongMaterial({
-        color: 0x111111,          // Dark gray base color (Tron-like)
-        emissive: 0x00ff00,       // Neon green glow
-        emissiveIntensity: 1.5,   // Strong glow
-        transparent: true,        // Slight transparency for holographic effect
-        opacity: 0.7,             // Semi-translucent
-        side: THREE.DoubleSide
-    });
-    const portalDisc = new THREE.Mesh(portalGeometry, portalMaterial);
-    // No rotation applied, so it stands upright by default
-    portal.add(portalDisc);
+            const rimGeometry = new THREE.TorusGeometry(portalRadius, 0.2, 16, 100);
+            const rimMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ff00,
+                emissive: 0x00ff00,
+                emissiveIntensity: 2.0,
+                side: THREE.DoubleSide
+            });
+            const portalRim = new THREE.Mesh(rimGeometry, rimMaterial);
+            portal.add(portalRim);
 
-    // Torus rim (outline)
-    const rimGeometry = new THREE.TorusGeometry(portalRadius, 0.2, 16, 100); // Thicker ring, matching original
-    const rimMaterial = new THREE.MeshBasicMaterial({
-        color: 0x00ff00,          // Bright neon green
-        emissive: 0x00ff00,       // Glow (MeshBasicMaterial doesn't use emissive, but color acts as glow)
-        emissiveIntensity: 2.0,   // High intensity for rim glow
-        side: THREE.DoubleSide
-    });
-    const portalRim = new THREE.Mesh(rimGeometry, rimMaterial);
-    // No rotation applied, so it stands upright by default
-    portal.add(portalRim);
-
-    // Position the portal group
-    const halfGrid = gridSize / 2;
-    portal.position.set(
-        Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius,
-        portalRadius, // Raised slightly off the ground
-        Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius
-    );
-    scene.add(portal);
-    return portal;
-}
+            const halfGrid = gridSize / 2;
+            portal.position.set(
+                Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius,
+                portalRadius,
+                Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius
+            );
+            scene.add(portal);
+            return portal;
+        }
 
         function redirectToVibeverse() {
-            const username = "player" + Math.floor(Math.random() * 1000); // Random username
-            const color = colors[currentColorIndex].css.substring(1); // Hex without #
+            const username = "player" + Math.floor(Math.random() * 1000);
+            const color = colors[currentColorIndex].css.substring(1);
             const speed = currentSpeed;
-            const ref = window.location.origin; // Current game URL
+            const ref = window.location.origin;
             const params = {
                 username,
                 color,
@@ -339,7 +324,7 @@
                 const incomingColor = urlParams.get('color');
                 const colorHex = parseInt(incomingColor, 16);
                 currentColorIndex = colors.findIndex(c => c.hex === colorHex);
-                if (currentColorIndex === -1) currentColorIndex = 0; // Default to cyan if color not found
+                if (currentColorIndex === -1) currentColorIndex = 0;
                 startGame();
             }
         }
@@ -379,6 +364,7 @@
             turnLeftPressed = false;
             turnRightPressed = false;
             boostPressed = false;
+            jumpPressed = false; // Reset jump flag
             jumped = false;
             boostParticles.visible = false;
             spawnPortalButton.style.display = 'none';
@@ -504,7 +490,7 @@
             }
         });
 
-        checkURLParams(); // Check on page load
+        checkURLParams();
 
         function snapTo90Degrees(currentRotation) {
             const degrees = currentRotation * (180 / Math.PI);
@@ -566,17 +552,33 @@
                 const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60;
                 lastTime = timestamp;
 
-                if (boostPressed && timestamp - lastBoostTime >= boostCooldown && currentSpeed === baseSpeed) {
-                    currentSpeed = boostSpeed;
-                    boostStartTime = timestamp;
-                    lastBoostTime = timestamp;
-                    activateBoostParticles();
-                    boostPressed = false;
+                // Handle boost or jump with shared cooldown
+                if (timestamp - lastBoostTime >= boostCooldown) {
+                    if (boostPressed && currentSpeed === baseSpeed) {
+                        currentSpeed = boostSpeed;
+                        boostStartTime = timestamp;
+                        lastBoostTime = timestamp;
+                        activateBoostParticles();
+                        boostPressed = false;
+                    } else if (jumpPressed && !jumped) {
+                        bikeModel.position.y = 7;
+                        bikeModel.rotation.z = Math.PI;
+                        jumped = true;
+                        boostStartTime = timestamp;
+                        lastBoostTime = timestamp;
+                        jumpPressed = false;
+                    }
                 }
-                
-                if (currentSpeed === boostSpeed && timestamp - boostStartTime >= boostDuration) {
+
+                // Reset boost or jump state after duration
+                if ((currentSpeed === boostSpeed || jumped) && timestamp - boostStartTime >= boostDuration) {
                     currentSpeed = baseSpeed;
                     boostParticles.visible = false;
+                    if (jumped) {
+                        bikeModel.position.y = 0;
+                        bikeModel.rotation.z = 0;
+                        jumped = false;
+                    }
                 }
 
                 bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
