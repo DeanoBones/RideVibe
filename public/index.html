@@ -95,12 +95,12 @@
         const portalRadius = 1;
 
         // Wall trail system variables
-        const trailHeight = 2; // Height of wall
-        const trailWidth = 0.1; // Width of wall
-        const trailDepth = 0.15; // Depth (thickness) of wall
+        const trailHeight = 2;
+        const trailWidth = 1.5; // Wider walls (was 0.1)
+        const trailDepth = 0.15;
         const trailLifetime = 5000; // 5 seconds
-        const trailSpawnDistance = 0.5; // Distance between wall spawns
-        const trails = {}; // Store trail segments per player
+        const trailSpawnDistance = 1.5; // Increased to match wider walls (was 0.3)
+        const trails = {};
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -281,7 +281,7 @@
                 if (playerId === myId && bikeModel) {
                     trails[playerId] = { segments: [], lastPosition: null, color: colors[currentColorIndex].hex };
                 } else {
-                    return; // Trail not initialized yet
+                    return;
                 }
             }
 
@@ -298,7 +298,7 @@
                 });
                 const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
                 trailSegment.position.copy(pos);
-                trailSegment.rotation.y = rotation + Math.PI / 2; // Align with bike direction
+                trailSegment.rotation.y = rotation + Math.PI / 2;
                 scene.add(trailSegment);
                 trail.segments.push({ mesh: trailSegment, timestamp });
                 trail.lastPosition = pos.clone();
