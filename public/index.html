@@ -94,6 +94,12 @@
         let portal = null;
         const portalRadius = 1;
 
+        // Trail system variables
+        const trailLifetime = 5000; // 5 seconds
+        const trailSpawnDistance = 0.5; // Minimum distance between points
+        const maxTrailPoints = 50; // Cap on points per trail
+        const trails = {}; // Store trails per player
+
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
             { hex: 0xff0000, name: "Red", css: "#ff0000" },
@@ -225,6 +231,7 @@
                     break;
                 case 'update':
                     updateOtherPlayer(data);
+                    updateTrail(data.id, data.position, data.color, data.jumped, performance.now());
                     break;
                 case 'removePlayer':
                     removeOtherPlayer(data.id);
@@ -245,6 +252,24 @@
                     });
                     scene.add(otherBike);
                     otherPlayers[player.id] = { model: otherBike };
+
+                    // Initialize trail for this player
+                    const trailGeometry = new THREE.BufferGeometry();
+                    const positions = new Float32Array(maxTrailPoints * 3);
+                    trailGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                    const trailMaterial = new THREE.LineBasicMaterial({
+                        color: player.color || 0x00ffff,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    const trailLine = new THREE.Line(trailGeometry, trailMaterial);
+                    scene.add(trailLine);
+                    trails[player.id] = {
+                        points: [],
+                        line: trailLine,
+                        material: trailMaterial,
+                        lastPosition: null
+                    };
                 });
             }
         }
@@ -259,7 +284,72 @@
                     other.model.traverse(child => {
                         if (child.isMesh && child.material) child.material.color.setHex(player.color);
                     });
+                    if (trails[player.id]) {
+                        trails[player.id].material.color.setHex(player.color);
+                    }
                 }
+            }
+        }
+
+        function updateTrail(playerId, position, color, jumped, timestamp) {
+            if (!trails[playerId]) {
+                if (playerId === myId && bikeModel) {
+                    const trailGeometry = new THREE.BufferGeometry();
+                    const positions = new Float32Array(maxTrailPoints * 3);
+                    trailGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                    const trailMaterial = new THREE.LineBasicMaterial({
+                        color: color || colors[currentColorIndex].hex,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                    const trailLine = new THREE.Line(trailGeometry, trailMaterial);
+                    scene.add(trailLine);
+                    trails[playerId] = {
+                        points: [],
+                        line: trailLine,
+                        material: trailMaterial,
+                        lastPosition: null
+                    };
+                } else {
+                    return; // Trail not initialized yet
+                }
+            }
+
+            const trail = trails[playerId];
+            const pos = new THREE.Vector3(position.x, jumped ? 7 : 0.1, position.z); // Adjust height based on jump
+            const lastPos = trail.lastPosition;
+
+            // Only add point if moved far enough
+            if (!lastPos || pos.distanceTo(lastPos) >= trailSpawnDistance) {
+                trail.points.push({ position: pos.clone(), timestamp });
+                trail.lastPosition = pos.clone();
+
+                // Remove expired points
+                trail.points = trail.points.filter(point => timestamp - point.timestamp < trailLifetime);
+
+                // Cap at max points
+                if (trail.points.length > maxTrailPoints) {
+                    trail.points.shift();
+                }
+
+                // Update trail geometry
+                const positions = trail.line.geometry.attributes.position.array;
+                for (let i = 0; i < maxTrailPoints; i++) {
+                    if (i < trail.points.length) {
+                        const point = trail.points[i];
+                        positions[i * 3] = point.position.x;
+                        positions[i * 3 + 1] = point.position.y;
+                        positions[i * 3 + 2] = point.position.z;
+                    } else {
+                        // Fill remaining with last point to avoid gaps
+                        const lastPoint = trail.points[trail.points.length - 1];
+                        positions[i * 3] = lastPoint.position.x;
+                        positions[i * 3 + 1] = lastPoint.position.y;
+                        positions[i * 3 + 2] = lastPoint.position.z;
+                    }
+                }
+                trail.line.geometry.attributes.position.needsUpdate = true;
+                trail.line.geometry.setDrawRange(0, trail.points.length);
             }
         }
 
@@ -339,12 +429,20 @@
                 scene.remove(otherPlayers[id].model);
                 delete otherPlayers[id];
             }
+            if (trails[id]) {
+                scene.remove(trails[id].line);
+                delete trails[id];
+            }
         }
 
         function resetGame() {
             if (bikeModel) {
                 scene.remove(bikeModel);
                 bikeModel = null;
+            }
+            if (trails[myId]) {
+                scene.remove(trails[myId].line);
+                delete trails[myId];
             }
             if (portal) {
                 scene.remove(portal);
@@ -444,6 +542,9 @@
                 bikeModel.traverse(child => {
                     if (child.isMesh && child.material) child.material.color.setHex(newColor);
                 });
+                if (trails[myId]) {
+                    trails[myId].material.color.setHex(newColor);
+                }
                 socket.send(JSON.stringify({
                     type: 'update',
                     position: bikeModel.position,
@@ -509,10 +610,11 @@
             particleMaterial.color.setHex(colors[currentColorIndex].hex);
         }
 
-        function updateLocalPlayer(deltaTime) {
+        function updateLocalPlayer(deltaTime, timestamp) {
             if (bikeModel) {
                 bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
                 bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
+                updateTrail(myId, bikeModel.position, colors[currentColorIndex].hex, jumped, timestamp);
             }
         }
 
@@ -566,7 +668,7 @@
                     turnRightPressed = false;
                 }
 
-                updateLocalPlayer(deltaTime);
+                updateLocalPlayer(deltaTime, timestamp);
 
                 if (checkBoundaries(bikeModel.position)) {
                     gameOver = true;
