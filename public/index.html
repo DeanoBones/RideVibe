@@ -96,11 +96,12 @@
 
         // Wall trail system variables
         const trailHeight = 1.5;
-        const trailWidth = 1;
+        const trailWidth = 1.5;
         const trailDepth = 0.15;
         const trailLifetime = 15000; // 15 seconds
-        const trailSpawnDistance = trailWidth; // Ensure new segment spawns after moving this distance
-        const trailOffset = 5; // Initial offset behind bike
+        const trailSpawnDistance = trailWidth; // Distance check for spawning
+        const trailSpawnDelay = 250; // 250ms delay between spawns
+        const trailOffset = 2.5; // Initial offset behind bike
         const trails = {};
 
         // Collision variables
@@ -258,7 +259,7 @@
                     });
                     scene.add(otherBike);
                     otherPlayers[player.id] = { model: otherBike };
-                    trails[player.id] = { segments: [], lastPosition: null, lastRotation: null, color: player.color || 0x00ffff };
+                    trails[player.id] = { segments: [], lastPosition: null, lastRotation: null, lastSpawnTime: 0, color: player.color || 0x00ffff };
                 });
             }
         }
@@ -283,7 +284,7 @@
         function updateTrail(playerId, position, rotation, color, jumped, timestamp) {
             if (!trails[playerId]) {
                 if (playerId === myId && bikeModel) {
-                    trails[playerId] = { segments: [], lastPosition: null, lastRotation: null, color: colors[currentColorIndex].hex };
+                    trails[playerId] = { segments: [], lastPosition: null, lastRotation: null, lastSpawnTime: 0, color: colors[currentColorIndex].hex };
                 } else {
                     return;
                 }
@@ -293,9 +294,13 @@
             const pos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
             const lastPos = trail.lastPosition;
 
-            // Initial wall spawn with offset
+            // Time and distance checks
+            const timeSinceLastSpawn = timestamp - trail.lastSpawnTime;
+            if (timeSinceLastSpawn < trailSpawnDelay) return; // Wait for delay
+
             let spawnPos;
             if (!lastPos) {
+                // Initial wall spawn with offset
                 const offsetDirection = new THREE.Vector3(
                     -Math.sin(rotation) * trailOffset,
                     0,
@@ -303,12 +308,11 @@
                 );
                 spawnPos = pos.clone().add(offsetDirection);
             } else {
-                // Calculate distance from last wall's end
+                // Check distance from last wall's end
                 const distance = pos.distanceTo(lastPos);
                 if (distance < trailSpawnDistance) return; // Wait until moved enough
 
                 // Spawn new wall from the end of the last wall
-                const lastSegment = trail.segments[trail.segments.length - 1];
                 const lastRotation = trail.lastRotation || rotation;
                 const direction = new THREE.Vector3(
                     Math.sin(lastRotation),
@@ -332,6 +336,7 @@
             trail.segments.push({ mesh: trailSegment, timestamp });
             trail.lastPosition = spawnPos.clone();
             trail.lastRotation = rotation;
+            trail.lastSpawnTime = timestamp;
 
             // Cleanup old segments
             trail.segments = trail.segments.filter(segment => {
