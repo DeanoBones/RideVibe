@@ -347,7 +347,7 @@
     bikeBoundingBox.max.copy(center).add(bikeSize.clone().multiplyScalar(0.5));
 
     // Move the hitbox to the very front of the bike
-    const forwardShiftFactor = 1.8; // Increase this to push it forward
+    const forwardShiftFactor = 1.5; // Increase this to push it forward
     const centerOffset = new THREE.Vector3(
         Math.sin(bikeModel.rotation.y) * bikeSize.z * forwardShiftFactor, 
         0,
