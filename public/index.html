@@ -295,11 +295,11 @@
 
             const trail = trails[playerId];
             const bikePos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
-            const segmentLength = trailWidth; // Match segment length to width for seamless connection
+            const segmentLength = trailWidth; // Length of each segment
 
             let spawnPos;
             if (!trail.lastPosition) {
-                // First segment: spawn behind the bike by initialTrailOffset (2.3)
+                // First segment: spawn behind the bike by initialTrailOffset
                 const offsetDirection = new THREE.Vector3(
                     -Math.sin(rotation) * initialTrailOffset,
                     0,
@@ -308,11 +308,10 @@
                 spawnPos = bikePos.clone().add(offsetDirection);
             } else {
                 // Subsequent segments: spawn at the end of the last segment
-                const lastSegment = trail.segments[trail.segments.length - 1];
                 const lastPos = trail.lastPosition.clone();
                 const lastRot = trail.lastRotation;
 
-                // Calculate the endpoint of the last segment based on its rotation
+                // Calculate the endpoint of the last segment
                 const lastDirection = new THREE.Vector3(
                     Math.sin(lastRot),
                     0,
@@ -320,17 +319,14 @@
                 );
                 const lastEndPos = lastPos.clone().add(lastDirection.multiplyScalar(segmentLength / 2));
 
-                // If rotation changed, start the new segment at the last segment's endpoint
-                if (Math.abs(rotation - lastRot) > 0.01) {
+                // Check distance from bike to last endpoint
+                const distanceFromLastEnd = bikePos.distanceTo(lastEndPos);
+
+                // Spawn a new segment if the bike has moved far enough or turned
+                if (distanceFromLastEnd >= segmentLength || Math.abs(rotation - lastRot) > 0.01) {
                     spawnPos = lastEndPos.clone();
                 } else {
-                    // If moving straight, check distance from last endpoint
-                    const distanceMoved = bikePos.distanceTo(lastEndPos);
-                    if (distanceMoved >= segmentLength) {
-                        spawnPos = lastEndPos.clone();
-                    } else {
-                        return; // Not far enough to spawn a new segment yet
-                    }
+                    return; // Not far enough to spawn a new segment
                 }
             }
 
@@ -341,7 +337,7 @@
                 Math.cos(rotation)
             );
 
-            // Adjust spawn position to center the segment
+            // Create and position the new segment
             const trailGeometry = new THREE.BoxGeometry(segmentLength, trailHeight, trailDepth);
             const trailMaterial = new THREE.MeshPhongMaterial({
                 color: color || trail.color,
