@@ -99,12 +99,12 @@
         const trailWidth = 1.5;
         const trailDepth = 0.15;
         const trailLifetime = 15000; // 15 seconds
-        const trailSpawnDistance = 1.5;
-        const trailOffset = 2.5; // Offset behind bike
+        const trailSpawnDistance = trailWidth; // Ensure new segment spawns after moving this distance
+        const trailOffset = 2.5; // Initial offset behind bike
         const trails = {};
 
         // Collision variables
-        const bikeBoundingBox = new THREE.Box3(); // Bounding box for the local player's bike
+        const bikeBoundingBox = new THREE.Box3();
 
         const colors = [
             { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
@@ -258,7 +258,7 @@
                     });
                     scene.add(otherBike);
                     otherPlayers[player.id] = { model: otherBike };
-                    trails[player.id] = { segments: [], lastPosition: null, color: player.color || 0x00ffff };
+                    trails[player.id] = { segments: [], lastPosition: null, lastRotation: null, color: player.color || 0x00ffff };
                 });
             }
         }
@@ -283,7 +283,7 @@
         function updateTrail(playerId, position, rotation, color, jumped, timestamp) {
             if (!trails[playerId]) {
                 if (playerId === myId && bikeModel) {
-                    trails[playerId] = { segments: [], lastPosition: null, color: colors[currentColorIndex].hex };
+                    trails[playerId] = { segments: [], lastPosition: null, lastRotation: null, color: colors[currentColorIndex].hex };
                 } else {
                     return;
                 }
@@ -291,49 +291,63 @@
 
             const trail = trails[playerId];
             const pos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
-
-            // Offset wall spawn behind the bike
-            const offsetDirection = new THREE.Vector3(
-                -Math.sin(rotation) * trailOffset,
-                0,
-                -Math.cos(rotation) * trailOffset
-            );
-            const spawnPos = pos.clone().add(offsetDirection);
-
             const lastPos = trail.lastPosition;
 
-            if (!lastPos || spawnPos.distanceTo(lastPos) >= trailSpawnDistance) {
-                const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-                const trailMaterial = new THREE.MeshPhongMaterial({
-                    color: color || trail.color,
-                    emissive: color || trail.color,
-                    emissiveIntensity: 0.8
-                });
-                const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                trailSegment.position.copy(spawnPos);
-                trailSegment.rotation.y = rotation + Math.PI / 2;
-                scene.add(trailSegment);
-                trail.segments.push({ mesh: trailSegment, timestamp });
-                trail.lastPosition = spawnPos.clone();
+            // Initial wall spawn with offset
+            let spawnPos;
+            if (!lastPos) {
+                const offsetDirection = new THREE.Vector3(
+                    -Math.sin(rotation) * trailOffset,
+                    0,
+                    -Math.cos(rotation) * trailOffset
+                );
+                spawnPos = pos.clone().add(offsetDirection);
+            } else {
+                // Calculate distance from last wall's end
+                const distance = pos.distanceTo(lastPos);
+                if (distance < trailSpawnDistance) return; // Wait until moved enough
 
-                // Cleanup old segments
-                trail.segments = trail.segments.filter(segment => {
-                    if (timestamp - segment.timestamp > trailLifetime) {
-                        scene.remove(segment.mesh);
-                        return false;
-                    }
-                    return true;
-                });
+                // Spawn new wall from the end of the last wall
+                const lastSegment = trail.segments[trail.segments.length - 1];
+                const lastRotation = trail.lastRotation || rotation;
+                const direction = new THREE.Vector3(
+                    Math.sin(lastRotation),
+                    0,
+                    Math.cos(lastRotation)
+                );
+                spawnPos = lastPos.clone().add(direction.multiplyScalar(trailWidth));
             }
+
+            // Create and position new wall segment
+            const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
+            const trailMaterial = new THREE.MeshPhongMaterial({
+                color: color || trail.color,
+                emissive: color || trail.color,
+                emissiveIntensity: 0.8
+            });
+            const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
+            trailSegment.position.copy(spawnPos);
+            trailSegment.rotation.y = rotation + Math.PI / 2;
+            scene.add(trailSegment);
+            trail.segments.push({ mesh: trailSegment, timestamp });
+            trail.lastPosition = spawnPos.clone();
+            trail.lastRotation = rotation;
+
+            // Cleanup old segments
+            trail.segments = trail.segments.filter(segment => {
+                if (timestamp - segment.timestamp > trailLifetime) {
+                    scene.remove(segment.mesh);
+                    return false;
+                }
+                return true;
+            });
         }
 
         function checkCollisions() {
             if (!bikeModel || gameOver) return;
 
-            // Update the bike's bounding box
             bikeBoundingBox.setFromObject(bikeModel);
 
-            // Check against all trail segments
             for (let playerId in trails) {
                 const trail = trails[playerId];
                 for (let segment of trail.segments) {
@@ -342,7 +356,7 @@
                         gameOver = true;
                         console.log("Collision detected! Game Over!");
                         restartButton.style.display = 'block';
-                        return; // Exit early on collision
+                        return;
                     }
                 }
             }
