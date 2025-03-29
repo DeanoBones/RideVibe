@@ -96,11 +96,12 @@
 
         // Wall trail system variables
         const trailHeight = 1.5;
-        const trailWidth = 1;
+        const trailWidth = 1.5;
         const trailDepth = 0.15;
         const trailLifetime = 15000; // 15 seconds
-        const initialTrailOffset = 2.5; // Initial offset behind bike to avoid self-collision
+        const initialTrailOffset = 2.5; // Initial offset behind bike
         const trails = {};
+        let gameStartTime = 0; // Track when the game starts
 
         // Collision variables
         const bikeBoundingBox = new THREE.Box3(); // Bounding box for the local player's bike
@@ -295,11 +296,16 @@
 
             const trail = trails[playerId];
             const bikePos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
-            const segmentLength = trailWidth; // Length of each segment
+            const segmentLength = trailWidth; // Length of each segment matches trailWidth
+
+            // Check if 2 seconds have passed since game start
+            if (timestamp - gameStartTime < 2000) {
+                return; // Don't spawn any walls until 2 seconds have passed
+            }
 
             let spawnPos;
             if (!trail.lastPosition) {
-                // First segment: spawn behind the bike by initialTrailOffset
+                // First segment: spawn 2.5 units behind the bike after 2-second delay
                 const offsetDirection = new THREE.Vector3(
                     -Math.sin(rotation) * initialTrailOffset,
                     0,
@@ -319,15 +325,12 @@
                 );
                 const lastEndPos = lastPos.clone().add(lastDirection.multiplyScalar(segmentLength / 2));
 
-                // Check distance from bike to last endpoint
+                // Check distance from bike to last endpoint or if turned
                 const distanceFromLastEnd = bikePos.distanceTo(lastEndPos);
-
-                // Spawn a new segment if the bike has moved far enough or turned
-                if (distanceFromLastEnd >= segmentLength || Math.abs(rotation - lastRot) > 0.01) {
-                    spawnPos = lastEndPos.clone();
-                } else {
-                    return; // Not far enough to spawn a new segment
+                if (distanceFromLastEnd < segmentLength && Math.abs(rotation - lastRot) <= 0.01) {
+                    return; // Not far enough or no turn, don't spawn yet
                 }
+                spawnPos = lastEndPos.clone();
             }
 
             // Direction of the new segment based on current bike rotation
@@ -483,6 +486,7 @@
             currentSpeed = baseSpeed;
             lastBoostTime = -boostCooldown;
             lastTime = 0;
+            gameStartTime = 0; // Reset game start time
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
@@ -524,6 +528,7 @@
 
         function startGame() {
             gameStarted = true;
+            gameStartTime = performance.now(); // Record the start time
             startButton.style.display = 'none';
             colorButton.style.display = 'none';
             restartButton.style.display = 'none';
