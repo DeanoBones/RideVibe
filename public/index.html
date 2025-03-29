@@ -96,10 +96,10 @@
 
         // Wall trail system variables
         const trailHeight = 1.5;
-        const trailWidth = 1.5;
+        const trailWidth = 1;
         const trailDepth = 0.15;
         const trailLifetime = 15000; // 15 seconds
-        const trailSpawnDistance = 1.5;
+        const trailSpawnDistance = 1;
         const trailOffset = 1.0; // Reduced offset since hitbox is now front-focused
         const trails = {};
 
@@ -328,18 +328,33 @@
         }
 
         function checkCollisions() {
-            if (!bikeModel || gameOver) return;
+    if (!bikeModel || gameOver) return;
 
-            // Update the bike's bounding box and shift it to the front
-            bikeBoundingBox.setFromObject(bikeModel);
-            const bikeSize = new THREE.Vector3();
-            bikeBoundingBox.getSize(bikeSize);
-            const centerOffset = new THREE.Vector3(
-                Math.sin(bikeModel.rotation.y) * bikeSize.z / 2, // Shift forward along bike's direction
-                0,
-                Math.cos(bikeModel.rotation.y) * bikeSize.z / 2
-            );
-            bikeBoundingBox.translate(centerOffset); // Move hitbox to front half of bike
+    // Update the bike's bounding box and shift it forward
+    bikeBoundingBox.setFromObject(bikeModel);
+
+    const bikeSize = new THREE.Vector3();
+    bikeBoundingBox.getSize(bikeSize);
+
+    // Scale the bounding box down (e.g., 50% of original size)
+    const scaleFactor = 0.5; // Adjust this to control size reduction
+    bikeSize.multiplyScalar(scaleFactor);
+
+    // Get the center and adjust min/max to shrink hitbox
+    const center = new THREE.Vector3();
+    bikeBoundingBox.getCenter(center);
+    bikeBoundingBox.min.copy(center).sub(bikeSize.clone().multiplyScalar(0.5));
+    bikeBoundingBox.max.copy(center).add(bikeSize.clone().multiplyScalar(0.5));
+
+    // Move hitbox further forward
+    const forwardShiftFactor = 0.8; // Adjust this to move hitbox forward
+    const centerOffset = new THREE.Vector3(
+        Math.sin(bikeModel.rotation.y) * bikeSize.z * forwardShiftFactor,
+        0,
+        Math.cos(bikeModel.rotation.y) * bikeSize.z * forwardShiftFactor
+    );
+    bikeBoundingBox.translate(centerOffset);
+}
 
             // Check against all trail segments
             for (let playerId in trails) {
