@@ -99,9 +99,10 @@
         const trailWidth = 1.5;
         const trailDepth = 0.15;
         const trailLifetime = 15000; // 15 seconds
-        const initialTrailOffset = 6; // Initial offset behind bike
+        const initialTrailOffset = 2.5; // Initial offset behind bike
         const trails = {};
         let gameStartTime = 0; // Track when the game starts
+        let firstWallSpawned = false; // Flag to ensure first wall spawns only once
 
         // Collision variables
         const bikeBoundingBox = new THREE.Box3(); // Bounding box for the local player's bike
@@ -304,15 +305,16 @@
             }
 
             let spawnPos;
-            if (!trail.lastPosition) {
-                // First segment: spawn 2.5 units behind the bike after 2-second delay
+            if (!trail.lastPosition && !firstWallSpawned) {
+                // First segment: spawn 2.5 units behind the bike after 2-second delay, only once
                 const offsetDirection = new THREE.Vector3(
                     -Math.sin(rotation) * initialTrailOffset,
                     0,
                     -Math.cos(rotation) * initialTrailOffset
                 );
                 spawnPos = bikePos.clone().add(offsetDirection);
-            } else {
+                firstWallSpawned = true; // Mark first wall as spawned
+            } else if (trail.lastPosition) {
                 // Subsequent segments: spawn at the end of the last segment
                 const lastPos = trail.lastPosition.clone();
                 const lastRot = trail.lastRotation;
@@ -331,6 +333,8 @@
                     return; // Not far enough or no turn, don't spawn yet
                 }
                 spawnPos = lastEndPos.clone();
+            } else {
+                return; // Wait until first wall is spawned
             }
 
             // Direction of the new segment based on current bike rotation
@@ -487,6 +491,7 @@
             lastBoostTime = -boostCooldown;
             lastTime = 0;
             gameStartTime = 0; // Reset game start time
+            firstWallSpawned = false; // Reset first wall flag
             if (animationFrameId) {
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
@@ -529,6 +534,7 @@
         function startGame() {
             gameStarted = true;
             gameStartTime = performance.now(); // Record the start time
+            firstWallSpawned = false; // Ensure first wall hasn’t spawned yet
             startButton.style.display = 'none';
             colorButton.style.display = 'none';
             restartButton.style.display = 'none';
