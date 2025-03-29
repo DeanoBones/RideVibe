@@ -327,34 +327,22 @@
             }
         }
 
-        function checkCollisions() {
-    if (!bikeModel || gameOver) return;
+				function checkCollisions() {
+			if (!bikeModel || gameOver) return;
 
-    // Update the bike's bounding box and shift it forward
-    bikeBoundingBox.setFromObject(bikeModel);
+			// Define a separate cube hitbox in front of the bike
+			const hitboxSize = new THREE.Vector3(1, 1, 1); // Adjust width, height, depth
+			const hitboxOffset = new THREE.Vector3(
+				Math.sin(bikeModel.rotation.y) * 2, // Move it forward
+				0.5, // Slightly above ground (if needed)
+				Math.cos(bikeModel.rotation.y) * 2
+			);
 
-    const bikeSize = new THREE.Vector3();
-    bikeBoundingBox.getSize(bikeSize);
-
-    // Scale the bounding box down (e.g., 50% of original size)
-    const scaleFactor = 0.5; // Adjust this to control size reduction
-    bikeSize.multiplyScalar(scaleFactor);
-
-    // Get the center and adjust min/max to shrink hitbox
-    const center = new THREE.Vector3();
-    bikeBoundingBox.getCenter(center);
-    bikeBoundingBox.min.copy(center).sub(bikeSize.clone().multiplyScalar(0.5));
-    bikeBoundingBox.max.copy(center).add(bikeSize.clone().multiplyScalar(0.5));
-
-    // Move hitbox further forward
-    const forwardShiftFactor = 0.8; // Adjust this to move hitbox forward
-    const centerOffset = new THREE.Vector3(
-        Math.sin(bikeModel.rotation.y) * bikeSize.z * forwardShiftFactor,
-        0,
-        Math.cos(bikeModel.rotation.y) * bikeSize.z * forwardShiftFactor
-    );
-    bikeBoundingBox.translate(centerOffset);
-}
+			// Create a hitbox at the specified position
+			const hitbox = new THREE.Box3().setFromCenterAndSize(
+				bikeModel.position.clone().add(hitboxOffset), // Position in front
+				hitboxSize // Fixed size
+			);
 
             // Check against all trail segments
             for (let playerId in trails) {
