@@ -1,37 +1,61 @@
 <html>
 <head>
-    <title>Tron RideVibe</title>
+    <title>RideVibe</title>
     <style>
-        body { margin: 0; }
-        canvas { width: 100%; height: 100vh; }
-        #startButton {
+        body {
+            margin: 0;
+            position: relative;
+        }
+        canvas {
+            width: 100%;
+            height: 100vh;
+        }
+        #startButton, #colorButton, #restartButton, #spawnPortalButton {
             position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
             padding: 10px 20px;
             font-size: 16px;
             cursor: pointer;
         }
-        #restartButton {
-            position: absolute;
+        #startButton {
+            left: 50%;
+            top: 45%;
+            transform: translateX(-50%);
+        }
+        #colorButton {
             left: 50%;
             top: 50%;
-            transform: translate(-50%, -50%);
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
+            transform: translateX(-50%);
+            transition: background-color 0.3s;
+        }
+        #restartButton {
+            left: 50%;
+            top: 50%;
+            transform: translateX(-50%);
             display: none;
+        }
+        #spawnPortalButton {
+            top: 10px;
+            right: 10px;
+            display: none;
+        }
+        #cooldownCircle {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 100px;
+            height: 100px;
         }
     </style>
 </head>
 <body>
     <button id="startButton">Start</button>
+    <button id="colorButton">Change Color</button>
     <button id="restartButton">Restart</button>
+    <button id="spawnPortalButton">Spawn Vibeverse Portal</button>
+    <canvas id="cooldownCircle"></canvas>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://unpkg.com/three@0.134.0/examples/js/loaders/GLTFLoader.js"></script>
     <script>
-        // Scene setup
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer();
@@ -45,202 +69,401 @@
         scene.add(directionalLight);
 
         const gridSize = 100;
-        const gridHelper = new THREE.GridHelper(gridSize, 50, 0x00ffff, 0x00ffff);
-        scene.add(gridHelper);
+        const divisions = 50;
 
-        // Bike and trail variables
+        const gridHelperLower = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
+        gridHelperLower.position.y = 0;
+        scene.add(gridHelperLower);
+        const planeGeometry = new THREE.PlaneGeometry(gridSize, gridSize);
+        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x001111, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const planeLower = new THREE.Mesh(planeGeometry, planeMaterial);
+        planeLower.rotation.x = Math.PI / 2;
+        planeLower.position.y = 0;
+        scene.add(planeLower);
+
+        const gridHelperUpper = new THREE.GridHelper(gridSize, divisions, 0x00ffff, 0x00ffff);
+        gridHelperUpper.position.y = 8;
+        scene.add(gridHelperUpper);
+        const planeUpper = new THREE.Mesh(planeGeometry.clone(), planeMaterial.clone());
+        planeUpper.rotation.x = Math.PI / 2;
+        planeUpper.position.y = 7.9;
+        scene.add(planeUpper);
+
         const loader = new THREE.GLTFLoader();
         let bikeModel;
+        let portal = null;
+        const portalRadius = 1;
+
+        // Wall trail system variables
         const trailHeight = 1.5;
-        const trailWidth = 1.5; // Length of each segment
-        const trailDepth = 0.15; // Thickness of the wall
-        const initialTrailOffset = 2.5; // Distance behind bike to start trail
-        let trailMesh, trailGeometry, trailPositions = [], lastTrailPoint;
-        const bikeBoundingBox = new THREE.Box3();
+        const trailWidth = 1.5;
+        const trailDepth = 0.15;
+        const trailLifetime = 15000; // 15 seconds
+        const trailSpawnDistance = 1.5;
+        const trailOffset = 2.5; // Offset behind bike
+        const trails = {};
 
-        // Game state
-        let gameStarted = false;
-        let gameOver = false;
-        let lastTime = 0;
-        const baseSpeed = 6;
+        // Collision variables
+        const bikeBoundingBox = new THREE.Box3(); // Bounding box for the local player's bike
 
-        // Input handling
+        const colors = [
+            { hex: 0x00ffff, name: "Cyan", css: "#00ffff" },
+            { hex: 0xff0000, name: "Red", css: "#ff0000" },
+            { hex: 0x00ff00, name: "Green", css: "#00ff00" },
+            { hex: 0xffff00, name: "Yellow", css: "#ffff00" },
+            { hex: 0xff00ff, name: "Magenta", css: "#ff00ff" },
+            { hex: 0xffa500, name: "Orange", css: "#ffa500" },
+            { hex: 0x800080, name: "Purple", css: "#800080" },
+            { hex: 0x0000ff, name: "Blue", css: "#0000ff" },
+            { hex: 0xffffff, name: "White", css: "#ffffff" }
+        ];
+        let currentColorIndex = 0;
+
+        camera.position.set(0, 5, -10);
+
         const keys = {};
-        let turnLeft = false;
-        let turnRight = false;
+        let turnLeftPressed = false;
+        let turnRightPressed = false;
+        let boostPressed = false;
+        let jumpPressed = false;
+        let jumped = false;
         document.addEventListener('keydown', (event) => {
             if (!keys[event.key]) {
                 keys[event.key] = true;
-                if (event.key === 'a' || event.key === 'ArrowLeft') turnLeft = true;
-                if (event.key === 'd' || event.key === 'ArrowRight') turnRight = true;
+                if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = true;
+                if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = true;
+                if (event.key === 'ArrowUp' || event.key === 'w') boostPressed = true;
+                if (event.key === ' ') jumpPressed = true;
             }
         });
         document.addEventListener('keyup', (event) => {
             keys[event.key] = false;
-            if (event.key === 'a' || event.key === 'ArrowLeft') turnLeft = false;
-            if (event.key === 'd' || event.key === 'ArrowRight') turnRight = false;
+            if (event.key === 'a' || event.key === 'ArrowLeft') turnLeftPressed = false;
+            if (event.key === 'd' || event.key === 'ArrowRight') turnRightPressed = false;
+            if (event.key === 'ArrowUp' || event.key === 'w') boostPressed = false;
+            if (event.key === ' ') jumpPressed = false;
         });
 
-        // Initialize trail
-        function initializeTrail(position, rotation, color) {
-            const direction = new THREE.Vector3(-Math.sin(rotation), 0, -Math.cos(rotation)).normalize();
-            const startPos = position.clone().addScaledVector(direction, -initialTrailOffset);
+        const baseSpeed = 6;
+        const boostSpeed = 12;
+        let currentSpeed = baseSpeed;
+        let boostStartTime = 0;
+        const boostDuration = 4000;
+        const boostCooldown = 10000;
+        let lastBoostTime = -boostCooldown;
+        let gameOver = false;
+        let gameStarted = false;
+        let lastTime = 0;
+        let animationFrameId = null;
 
-            trailPositions = [
-                startPos.x - trailDepth / 2 * Math.cos(rotation), 0, startPos.z + trailDepth / 2 * Math.sin(rotation), // Bottom left
-                startPos.x + trailDepth / 2 * Math.cos(rotation), 0, startPos.z - trailDepth / 2 * Math.sin(rotation), // Bottom right
-                startPos.x - trailDepth / 2 * Math.cos(rotation), trailHeight, startPos.z + trailDepth / 2 * Math.sin(rotation), // Top left
-                startPos.x + trailDepth / 2 * Math.cos(rotation), trailHeight, startPos.z - trailDepth / 2 * Math.sin(rotation)  // Top right
-            ];
-            lastTrailPoint = startPos.clone();
+        let boostParticles;
+        const particleCount = 50;
+        const particles = new THREE.BufferGeometry();
+        const particlePositions = new Float32Array(particleCount * 3);
+        const particleVelocities = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            particlePositions[i * 3] = 0;
+            particlePositions[i * 3 + 1] = 0;
+            particlePositions[i * 3 + 2] = 0;
+            particleVelocities[i * 3] = (Math.random() - 0.5) * 5;
+            particleVelocities[i * 3 + 1] = (Math.random() - 0.5) * 5;
+            particleVelocities[i * 3 + 2] = (Math.random() - 0.5) * 5;
+        }
+        particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        const particleMaterial = new THREE.PointsMaterial({
+            color: 0xffff00,
+            size: 0.2,
+            transparent: true,
+            opacity: 0.8
+        });
+        boostParticles = new THREE.Points(particles, particleMaterial);
+        boostParticles.visible = false;
+        scene.add(boostParticles);
 
-            trailGeometry = new THREE.BufferGeometry();
-            trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(trailPositions, 3));
-            trailGeometry.setIndex([0, 1, 2, 1, 3, 2]); // Initial front face
-            const trailMaterial = new THREE.MeshPhongMaterial({
-                color: color,
-                emissive: color,
-                emissiveIntensity: 0.8,
+        const cooldownCanvas = document.getElementById('cooldownCircle');
+        const cooldownCtx = cooldownCanvas.getContext('2d');
+        cooldownCanvas.width = 40;
+        cooldownCanvas.height = 40;
+
+        function drawCooldownCircle(timestamp) {
+            cooldownCtx.clearRect(0, 0, 40, 40);
+            const centerX = 20;
+            const centerY = 20;
+            const radius = 18;
+
+            cooldownCtx.beginPath();
+            cooldownCtx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            cooldownCtx.lineWidth = 4;
+            cooldownCtx.strokeStyle = '#333333';
+            cooldownCtx.stroke();
+
+            const timeSinceLastBoost = timestamp - lastBoostTime;
+            let progress = Math.min(timeSinceLastBoost / boostCooldown, 1);
+            if (currentSpeed === boostSpeed || jumped) {
+                progress = Math.max(1 - (timeSinceLastBoost / boostDuration), 0);
+            }
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + (2 * Math.PI * progress);
+
+            cooldownCtx.beginPath();
+            cooldownCtx.arc(centerX, centerY, radius, startAngle, endAngle);
+            cooldownCtx.lineWidth = 4;
+            cooldownCtx.strokeStyle = progress === 1 ? '#00ff00' : '#00ffff';
+            cooldownCtx.stroke();
+        }
+
+        const socket = new WebSocket(`wss://${window.location.host}`);
+        let myId;
+        const otherPlayers = {};
+
+        socket.onopen = () => {
+            console.log('Connected to server');
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            switch (data.type) {
+                case 'init':
+                    myId = data.id;
+                    socket.send(JSON.stringify({ type: 'getPlayers' }));
+                    break;
+                case 'currentPlayers':
+                    data.players.forEach(player => {
+                        if (player.id !== myId) addOtherPlayer(player);
+                    });
+                    break;
+                case 'start':
+                    if (data.id !== myId) addOtherPlayer(data);
+                    break;
+                case 'update':
+                    updateOtherPlayer(data);
+                    updateTrail(data.id, data.position, data.rotation, data.color, data.jumped, performance.now());
+                    break;
+                case 'removePlayer':
+                    removeOtherPlayer(data.id);
+                    break;
+            }
+        };
+
+        function addOtherPlayer(player) {
+            if (!otherPlayers[player.id] && player.id !== myId) {
+                loader.load('./models/bike/scene.gltf', (gltf) => {
+                    const otherBike = gltf.scene;
+                    otherBike.scale.set(2, 2, 2);
+                    otherBike.position.set(player.position.x, player.position.y, player.position.z);
+                    otherBike.rotation.y = player.rotation;
+                    otherBike.rotation.z = player.rotationZ || 0;
+                    otherBike.traverse(child => {
+                        if (child.isMesh && child.material) child.material.color.setHex(player.color || 0x00ffff);
+                    });
+                    scene.add(otherBike);
+                    otherPlayers[player.id] = { model: otherBike };
+                    trails[player.id] = { segments: [], lastPosition: null, color: player.color || 0x00ffff };
+                });
+            }
+        }
+
+        function updateOtherPlayer(player) {
+            if (otherPlayers[player.id]) {
+                const other = otherPlayers[player.id];
+                other.model.position.set(player.position.x, player.position.y, player.position.z);
+                other.model.rotation.y = player.rotation;
+                other.model.rotation.z = player.rotationZ || 0;
+                if (player.color) {
+                    other.model.traverse(child => {
+                        if (child.isMesh && child.material) child.material.color.setHex(player.color);
+                    });
+                    if (trails[player.id]) {
+                        trails[player.id].color = player.color;
+                    }
+                }
+            }
+        }
+
+        function updateTrail(playerId, position, rotation, color, jumped, timestamp) {
+            if (!trails[playerId]) {
+                if (playerId === myId && bikeModel) {
+                    trails[playerId] = { segments: [], lastPosition: null, color: colors[currentColorIndex].hex };
+                } else {
+                    return;
+                }
+            }
+
+            const trail = trails[playerId];
+            const pos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
+
+            // Offset wall spawn behind the bike
+            const offsetDirection = new THREE.Vector3(
+                -Math.sin(rotation) * trailOffset,
+                0,
+                -Math.cos(rotation) * trailOffset
+            );
+            const spawnPos = pos.clone().add(offsetDirection);
+
+            const lastPos = trail.lastPosition;
+
+            if (!lastPos || spawnPos.distanceTo(lastPos) >= trailSpawnDistance) {
+                const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
+                const trailMaterial = new THREE.MeshPhongMaterial({
+                    color: color || trail.color,
+                    emissive: color || trail.color,
+                    emissiveIntensity: 0.8
+                });
+                const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
+                trailSegment.position.copy(spawnPos);
+                trailSegment.rotation.y = rotation + Math.PI / 2;
+                scene.add(trailSegment);
+                trail.segments.push({ mesh: trailSegment, timestamp });
+                trail.lastPosition = spawnPos.clone();
+
+                // Cleanup old segments
+                trail.segments = trail.segments.filter(segment => {
+                    if (timestamp - segment.timestamp > trailLifetime) {
+                        scene.remove(segment.mesh);
+                        return false;
+                    }
+                    return true;
+                });
+            }
+        }
+
+        function checkCollisions() {
+            if (!bikeModel || gameOver) return;
+
+            // Update the bike's bounding box
+            bikeBoundingBox.setFromObject(bikeModel);
+
+            // Check against all trail segments
+            for (let playerId in trails) {
+                const trail = trails[playerId];
+                for (let segment of trail.segments) {
+                    const wallBox = new THREE.Box3().setFromObject(segment.mesh);
+                    if (bikeBoundingBox.intersectsBox(wallBox)) {
+                        gameOver = true;
+                        console.log("Collision detected! Game Over!");
+                        restartButton.style.display = 'block';
+                        return; // Exit early on collision
+                    }
+                }
+            }
+        }
+
+        function createPortal() {
+            if (portal) {
+                scene.remove(portal);
+            }
+
+            portal = new THREE.Group();
+            const portalGeometry = new THREE.CircleGeometry(portalRadius, 32);
+            const portalMaterial = new THREE.MeshPhongMaterial({
+                color: 0x111111,
+                emissive: 0x00ff00,
+                emissiveIntensity: 1.5,
+                transparent: true,
+                opacity: 0.7,
                 side: THREE.DoubleSide
             });
-            trailMesh = new THREE.Mesh(trailGeometry, trailMaterial);
-            scene.add(trailMesh);
-        }
+            const portalDisc = new THREE.Mesh(portalGeometry, portalMaterial);
+            portal.add(portalDisc);
 
-        // Update trail as bike moves
-        function updateTrail(position, rotation) {
-            const bikePos = position.clone();
-            const distance = bikePos.distanceTo(lastTrailPoint);
-
-            if (distance >= trailWidth) {
-                const direction = new THREE.Vector3(-Math.sin(rotation), 0, -Math.cos(rotation)).normalize();
-                const newPos = lastTrailPoint.clone().addScaledVector(direction, trailWidth);
-
-                trailPositions.push(
-                    newPos.x - trailDepth / 2 * Math.cos(rotation), 0, newPos.z + trailDepth / 2 * Math.sin(rotation), // Bottom left
-                    newPos.x + trailDepth / 2 * Math.cos(rotation), 0, newPos.z - trailDepth / 2 * Math.sin(rotation), // Bottom right
-                    newPos.x - trailDepth / 2 * Math.cos(rotation), trailHeight, newPos.z + trailDepth / 2 * Math.sin(rotation), // Top left
-                    newPos.x + trailDepth / 2 * Math.cos(rotation), trailHeight, newPos.z - trailDepth / 2 * Math.sin(rotation)  // Top right
-                );
-
-                const indices = [];
-                for (let i = 0; i < trailPositions.length / 3 - 4; i += 4) {
-                    indices.push(i, i + 1, i + 4, i + 1, i + 5, i + 4); // Front
-                    indices.push(i + 2, i + 3, i + 6, i + 3, i + 7, i + 6); // Back
-                    indices.push(i, i + 2, i + 4, i + 2, i + 6, i + 4); // Left
-                    indices.push(i + 1, i + 3, i + 5, i + 3, i + 7, i + 5); // Right
-                    indices.push(i + 2, i + 3, i + 6, i + 3, i + 7, i + 6); // Top
-                }
-                trailGeometry.setIndex(indices);
-                trailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(trailPositions, 3));
-                trailGeometry.computeVertexNormals();
-                trailGeometry.attributes.position.needsUpdate = true;
-
-                lastTrailPoint = newPos.clone();
-            }
-        }
-
-        // Collision detection
-        function checkCollisions() {
-            if (!bikeModel || !trailMesh || gameOver) return;
-
-            bikeBoundingBox.setFromObject(bikeModel);
-            const trailBox = new THREE.Box3().setFromObject(trailMesh);
-            if (bikeBoundingBox.intersectsBox(trailBox)) {
-                gameOver = true;
-                document.getElementById('restartButton').style.display = 'block';
-                console.log("Collision! Game Over!");
-            }
-        }
-
-        // Bike movement
-        function updateBike(deltaTime) {
-            if (!bikeModel) return;
-
-            const speed = baseSpeed;
-            bikeModel.position.z += speed * Math.cos(bikeModel.rotation.y) * deltaTime;
-            bikeModel.position.x += speed * Math.sin(bikeModel.rotation.y) * deltaTime;
-
-            if (turnLeft) {
-                bikeModel.rotation.y += Math.PI / 2;
-                turnLeft = false;
-            }
-            if (turnRight) {
-                bikeModel.rotation.y -= Math.PI / 2;
-                turnRight = false;
-            }
-
-            updateTrail(bikeModel.position, bikeModel.rotation.y);
-        }
-
-        // Start game
-        function startGame() {
-            gameStarted = true;
-            gameOver = false;
-            document.getElementById('startButton').style.display = 'none';
-            document.getElementById('restartButton').style.display = 'none';
-
-            loader.load('./models/bike/scene.gltf', (gltf) => {
-                bikeModel = gltf.scene;
-                bikeModel.scale.set(2, 2, 2);
-                bikeModel.position.set(0, 0, 0);
-                bikeModel.rotation.y = 0;
-                bikeModel.traverse(child => {
-                    if (child.isMesh) child.material.color.setHex(0x00ffff);
-                });
-                scene.add(bikeModel);
-
-                initializeTrail(bikeModel.position, bikeModel.rotation.y, 0x00ffff);
-                animate(0);
+            const rimGeometry = new THREE.TorusGeometry(portalRadius, 0.2, 16, 100);
+            const rimMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ff00,
+                emissive: 0x00ff00,
+                emissiveIntensity: 2.0,
+                side: THREE.DoubleSide
             });
+            const portalRim = new THREE.Mesh(rimGeometry, rimMaterial);
+            portal.add(portalRim);
+
+            const halfGrid = gridSize / 2;
+            portal.position.set(
+                Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius,
+                portalRadius,
+                Math.random() * (gridSize - portalRadius * 2) - halfGrid + portalRadius
+            );
+            scene.add(portal);
+            return portal;
         }
 
-        // Reset game
+        function redirectToVibeverse() {
+            const username = "player" + Math.floor(Math.random() * 1000);
+            const color = colors[currentColorIndex].css.substring(1);
+            const speed = currentSpeed;
+            const ref = window.location.origin;
+            const params = {
+                username,
+                color,
+                speed,
+                ref,
+                portal: true,
+                speed_x: currentSpeed * Math.sin(bikeModel.rotation.y),
+                speed_y: jumped ? 0 : 0,
+                speed_z: currentSpeed * Math.cos(bikeModel.rotation.y),
+                rotation_x: bikeModel.rotation.x,
+                rotation_y: bikeModel.rotation.y,
+                rotation_z: bikeModel.rotation.z
+            };
+            const queryString = new URLSearchParams(params).toString();
+            window.location.href = `http://portal.pieter.com/?${queryString}`;
+        }
+
+        function checkURLParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('portal') === 'true' && urlParams.get('color')) {
+                const incomingColor = urlParams.get('color');
+                const colorHex = parseInt(incomingColor, 16);
+                currentColorIndex = colors.findIndex(c => c.hex === colorHex);
+                if (currentColorIndex === -1) currentColorIndex = 0;
+                startGame();
+            }
+        }
+
+        function removeOtherPlayer(id) {
+            if (otherPlayers[id]) {
+                scene.remove(otherPlayers[id].model);
+                delete otherPlayers[id];
+            }
+            if (trails[id]) {
+                trails[id].segments.forEach(segment => scene.remove(segment.mesh));
+                delete trails[id];
+            }
+        }
+
         function resetGame() {
-            if (bikeModel) scene.remove(bikeModel);
-            if (trailMesh) scene.remove(trailMesh);
-            bikeModel = null;
-            trailMesh = null;
-            trailGeometry = null;
-            trailPositions = [];
-            lastTrailPoint = null;
-            gameStarted = false;
+            if (bikeModel) {
+                scene.remove(bikeModel);
+                bikeModel = null;
+            }
+            if (trails[myId]) {
+                trails[myId].segments.forEach(segment => scene.remove(segment.mesh));
+                delete trails[myId];
+            }
+            if (portal) {
+                scene.remove(portal);
+                portal = null;
+            }
             gameOver = false;
+            gameStarted = false;
+            currentSpeed = baseSpeed;
+            lastBoostTime = -boostCooldown;
             lastTime = 0;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
             camera.position.set(0, 5, -10);
-            document.getElementById('startButton').style.display = 'block';
-            document.getElementById('restartButton').style.display = 'none';
-        }
-
-        // Animation loop
-        function animate(timestamp) {
-            if (!gameStarted) {
-                renderer.render(scene, camera);
-                return;
+            for (let key in keys) {
+                keys[key] = false;
             }
-
-            requestAnimationFrame(animate);
-            const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60;
-            lastTime = timestamp;
-
-            if (!gameOver) {
-                updateBike(deltaTime);
-                checkCollisions();
-
-                camera.position.set(
-                    bikeModel.position.x,
-                    bikeModel.position.y + 5,
-                    bikeModel.position.z - 10
-                );
-                camera.lookAt(bikeModel.position);
-            }
-
-            renderer.render(scene, camera);
+            turnLeftPressed = false;
+            turnRightPressed = false;
+            boostPressed = false;
+            jumpPressed = false;
+            jumped = false;
+            boostParticles.visible = false;
+            spawnPortalButton.style.display = 'none';
         }
-
-        // Event listeners
-        document.getElementById('startButton').addEventListener('click', startGame);
-        document.getElementById('restartButton').addEventListener('click', resetGame);
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -248,6 +471,242 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
+        function checkBoundaries(bikePos) {
+            const halfGrid = gridSize / 2;
+            return bikePos.x < -halfGrid || bikePos.x > halfGrid || bikePos.z < -halfGrid || bikePos.z > halfGrid;
+        }
+
+        const startButton = document.getElementById('startButton');
+        const colorButton = document.getElementById('colorButton');
+        const restartButton = document.getElementById('restartButton');
+        const spawnPortalButton = document.getElementById('spawnPortalButton');
+
+        startButton.addEventListener('click', () => {
+            if (!gameStarted) {
+                startGame();
+            }
+        });
+
+        function startGame() {
+            gameStarted = true;
+            startButton.style.display = 'none';
+            colorButton.style.display = 'none';
+            restartButton.style.display = 'none';
+            spawnPortalButton.style.display = 'block';
+            
+            loader.load('./models/bike/scene.gltf', (gltf) => {
+                bikeModel = gltf.scene;
+                scene.add(bikeModel);
+                bikeModel.scale.set(2, 2, 2);
+                const halfGrid = gridSize / 2;
+                bikeModel.position.set(
+                    Math.random() * gridSize - halfGrid,
+                    0,
+                    Math.random() * gridSize - halfGrid
+                );
+                bikeModel.rotation.x = 0;
+                bikeModel.rotation.y = 0;
+                const startColor = colors[currentColorIndex].hex;
+                bikeModel.traverse(child => {
+                    if (child.isMesh && child.material) child.material.color.setHex(startColor);
+                });
+                socket.send(JSON.stringify({
+                    type: 'start',
+                    id: myId,
+                    position: bikeModel.position,
+                    rotation: bikeModel.rotation.y,
+                    rotationZ: bikeModel.rotation.z,
+                    color: startColor,
+                    speed: currentSpeed
+                }));
+                animate(0);
+            });
+        }
+
+        function updateColorButton() {
+            const currentColor = colors[currentColorIndex];
+            colorButton.style.backgroundColor = currentColor.css;
+            colorButton.style.color = "#000000";
+        }
+        updateColorButton();
+
+        colorButton.addEventListener('click', () => {
+            currentColorIndex = (currentColorIndex + 1) % colors.length;
+            const newColor = colors[currentColorIndex].hex;
+            if (gameStarted && bikeModel) {
+                bikeModel.traverse(child => {
+                    if (child.isMesh && child.material) child.material.color.setHex(newColor);
+                });
+                if (trails[myId]) {
+                    trails[myId].color = newColor;
+                    trails[myId].segments.forEach(segment => {
+                        segment.mesh.material.color.setHex(newColor);
+                        segment.mesh.material.emissive.setHex(newColor);
+                    });
+                }
+                socket.send(JSON.stringify({
+                    type: 'update',
+                    position: bikeModel.position,
+                    rotation: bikeModel.rotation.y,
+                    color: newColor,
+                    speed: currentSpeed,
+                    jumped: jumped
+                }));
+            }
+            updateColorButton();
+        });
+
+        restartButton.addEventListener('click', () => {
+            resetGame();
+            setTimeout(startGame, 50);
+        });
+
+        spawnPortalButton.addEventListener('click', () => {
+            if (gameStarted && !gameOver) {
+                createPortal();
+            }
+        });
+
+        checkURLParams();
+
+        function snapTo90Degrees(currentRotation) {
+            const degrees = currentRotation * (180 / Math.PI);
+            const snappedDegrees = Math.round(degrees / 90) * 90;
+            return snappedDegrees * (Math.PI / 180);
+        }
+
+        function updateBoostParticles(timestamp) {
+            if (!boostParticles.visible) return;
+            const positions = boostParticles.geometry.attributes.position.array;
+            const velocities = particleVelocities;
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] += velocities[i * 3] * 0.05;
+                positions[i * 3 + 1] += velocities[i * 3 + 1] * 0.05;
+                positions[i * 3 + 2] += velocities[i * 3 + 2] * 0.05;
+                const age = timestamp - boostStartTime;
+                if (age > boostDuration) {
+                    boostParticles.visible = false;
+                }
+            }
+            boostParticles.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function activateBoostParticles() {
+            boostParticles.visible = true;
+            const positions = boostParticles.geometry.attributes.position.array;
+            const offset = new THREE.Vector3(
+                -Math.sin(bikeModel.rotation.y) * 2,
+                jumped ? 7.5 : 0.5,
+                -Math.cos(bikeModel.rotation.y) * 2
+            );
+            const bikePos = bikeModel.position.clone().add(offset);
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = bikePos.x + (Math.random() - 0.5) * 0.5;
+                positions[i * 3 + 1] = bikePos.y + (Math.random() - 0.5) * 0.5;
+                positions[i * 3 + 2] = bikePos.z + (Math.random() - 0.5) * 0.5;
+            }
+            boostParticles.geometry.attributes.position.needsUpdate = true;
+            particleMaterial.color.setHex(colors[currentColorIndex].hex);
+        }
+
+        function updateLocalPlayer(deltaTime, timestamp) {
+            if (bikeModel) {
+                bikeModel.position.z += currentSpeed * Math.cos(bikeModel.rotation.y) * deltaTime;
+                bikeModel.position.x += currentSpeed * Math.sin(bikeModel.rotation.y) * deltaTime;
+                updateTrail(myId, bikeModel.position, bikeModel.rotation.y, colors[currentColorIndex].hex, jumped, timestamp);
+            }
+        }
+
+        function animate(timestamp) {
+            if (!gameStarted) {
+                renderer.render(scene, camera);
+                animationFrameId = null;
+                return;
+            }
+
+            animationFrameId = requestAnimationFrame(animate);
+
+            if (bikeModel && !gameOver) {
+                const deltaTime = lastTime ? (timestamp - lastTime) / 1000 : 1 / 60;
+                lastTime = timestamp;
+
+                if (timestamp - lastBoostTime >= boostCooldown) {
+                    if (boostPressed && currentSpeed === baseSpeed) {
+                        currentSpeed = boostSpeed;
+                        boostStartTime = timestamp;
+                        lastBoostTime = timestamp;
+                        activateBoostParticles();
+                        boostPressed = false;
+                    } else if (jumpPressed && !jumped) {
+                        bikeModel.position.y = 7;
+                        bikeModel.rotation.z = Math.PI;
+                        jumped = true;
+                        boostStartTime = timestamp;
+                        lastBoostTime = timestamp;
+                        activateBoostParticles();
+                        jumpPressed = false;
+                    }
+                }
+
+                if ((currentSpeed === boostSpeed || jumped) && timestamp - boostStartTime >= boostDuration) {
+                    currentSpeed = baseSpeed;
+                    boostParticles.visible = false;
+                    if (jumped) {
+                        bikeModel.position.y = 0;
+                        bikeModel.rotation.z = 0;
+                        jumped = false;
+                    }
+                }
+
+                if (turnLeftPressed) {
+                    bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y + Math.PI / 2);
+                    turnLeftPressed = false;
+                }
+                if (turnRightPressed) {
+                    bikeModel.rotation.y = snapTo90Degrees(bikeModel.rotation.y - Math.PI / 2);
+                    turnRightPressed = false;
+                }
+
+                updateLocalPlayer(deltaTime, timestamp);
+                checkCollisions();
+
+                if (checkBoundaries(bikeModel.position)) {
+                    gameOver = true;
+                    console.log("Game Over! Out of bounds!");
+                    restartButton.style.display = 'block';
+                }
+
+                if (portal) {
+                    const distanceToPortal = bikeModel.position.distanceTo(portal.position);
+                    if (distanceToPortal < portalRadius + 0.5) {
+                        redirectToVibeverse();
+                    }
+                }
+
+                socket.send(JSON.stringify({
+                    type: 'update',
+                    position: bikeModel.position,
+                    rotation: bikeModel.rotation.y,
+                    rotationZ: bikeModel.rotation.z,
+                    speed: currentSpeed,
+                    color: colors[currentColorIndex].hex,
+                    jumped: jumped
+                }));
+
+                if (currentSpeed === boostSpeed || jumped) {
+                    updateBoostParticles(timestamp);
+                }
+
+                drawCooldownCircle(timestamp);
+
+                const offset = new THREE.Vector3(0, 5, -10);
+                const cameraPosition = bikeModel.position.clone().add(offset.applyQuaternion(bikeModel.quaternion));
+                camera.position.lerp(cameraPosition, 0.1);
+                camera.lookAt(bikeModel.position);
+            }
+
+            renderer.render(scene, camera);
+        }
         animate(0);
     </script>
 </body>
