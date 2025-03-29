@@ -96,11 +96,10 @@
 
         // Wall trail system variables
         const trailHeight = 1.5;
-        const trailWidth = 1;
+        const trailWidth = 1.5;
         const trailDepth = 0.15;
         const trailLifetime = 15000; // 15 seconds
-        const trailSpawnDistance = 1.5;
-        const trailOffset = 2.3; // Offset behind bike
+        const initialTrailOffset = 2.3; // Initial offset behind bike to avoid self-collision
         const trails = {};
 
         // Collision variables
@@ -258,7 +257,7 @@
                     });
                     scene.add(otherBike);
                     otherPlayers[player.id] = { model: otherBike };
-                    trails[player.id] = { segments: [], lastPosition: null, color: player.color || 0x00ffff };
+                    trails[player.id] = { segments: [], lastPosition: null, lastRotation: null, color: player.color || 0x00ffff };
                 });
             }
         }
@@ -283,48 +282,88 @@
         function updateTrail(playerId, position, rotation, color, jumped, timestamp) {
             if (!trails[playerId]) {
                 if (playerId === myId && bikeModel) {
-                    trails[playerId] = { segments: [], lastPosition: null, color: colors[currentColorIndex].hex };
+                    trails[playerId] = { 
+                        segments: [], 
+                        lastPosition: null, 
+                        lastRotation: null, 
+                        color: colors[currentColorIndex].hex 
+                    };
                 } else {
                     return;
                 }
             }
 
             const trail = trails[playerId];
-            const pos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
+            const bikePos = new THREE.Vector3(position.x, jumped ? 7 - trailHeight / 2 : trailHeight / 2, position.z);
+            const segmentLength = trailWidth; // Match segment length to width for seamless connection
 
-            // Offset wall spawn behind the bike
-            const offsetDirection = new THREE.Vector3(
-                -Math.sin(rotation) * trailOffset,
-                0,
-                -Math.cos(rotation) * trailOffset
-            );
-            const spawnPos = pos.clone().add(offsetDirection);
+            let spawnPos;
+            if (!trail.lastPosition) {
+                // First segment: spawn behind the bike by initialTrailOffset (2.3)
+                const offsetDirection = new THREE.Vector3(
+                    -Math.sin(rotation) * initialTrailOffset,
+                    0,
+                    -Math.cos(rotation) * initialTrailOffset
+                );
+                spawnPos = bikePos.clone().add(offsetDirection);
+            } else {
+                // Subsequent segments: spawn at the end of the last segment
+                const lastSegment = trail.segments[trail.segments.length - 1];
+                const lastPos = trail.lastPosition.clone();
+                const lastRot = trail.lastRotation;
 
-            const lastPos = trail.lastPosition;
+                // Calculate the endpoint of the last segment based on its rotation
+                const lastDirection = new THREE.Vector3(
+                    Math.sin(lastRot),
+                    0,
+                    Math.cos(lastRot)
+                );
+                const lastEndPos = lastPos.clone().add(lastDirection.multiplyScalar(segmentLength / 2));
 
-            if (!lastPos || spawnPos.distanceTo(lastPos) >= trailSpawnDistance) {
-                const trailGeometry = new THREE.BoxGeometry(trailWidth, trailHeight, trailDepth);
-                const trailMaterial = new THREE.MeshPhongMaterial({
-                    color: color || trail.color,
-                    emissive: color || trail.color,
-                    emissiveIntensity: 0.8
-                });
-                const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
-                trailSegment.position.copy(spawnPos);
-                trailSegment.rotation.y = rotation + Math.PI / 2;
-                scene.add(trailSegment);
-                trail.segments.push({ mesh: trailSegment, timestamp });
-                trail.lastPosition = spawnPos.clone();
-
-                // Cleanup old segments
-                trail.segments = trail.segments.filter(segment => {
-                    if (timestamp - segment.timestamp > trailLifetime) {
-                        scene.remove(segment.mesh);
-                        return false;
+                // If rotation changed, start the new segment at the last segment's endpoint
+                if (Math.abs(rotation - lastRot) > 0.01) {
+                    spawnPos = lastEndPos.clone();
+                } else {
+                    // If moving straight, check distance from last endpoint
+                    const distanceMoved = bikePos.distanceTo(lastEndPos);
+                    if (distanceMoved >= segmentLength) {
+                        spawnPos = lastEndPos.clone();
+                    } else {
+                        return; // Not far enough to spawn a new segment yet
                     }
-                    return true;
-                });
+                }
             }
+
+            // Direction of the new segment based on current bike rotation
+            const direction = new THREE.Vector3(
+                Math.sin(rotation),
+                0,
+                Math.cos(rotation)
+            );
+
+            // Adjust spawn position to center the segment
+            const trailGeometry = new THREE.BoxGeometry(segmentLength, trailHeight, trailDepth);
+            const trailMaterial = new THREE.MeshPhongMaterial({
+                color: color || trail.color,
+                emissive: color || trail.color,
+                emissiveIntensity: 0.8
+            });
+            const trailSegment = new THREE.Mesh(trailGeometry, trailMaterial);
+            trailSegment.position.copy(spawnPos.add(direction.multiplyScalar(segmentLength / 2)));
+            trailSegment.rotation.y = rotation + Math.PI / 2; // Align with bike direction
+            scene.add(trailSegment);
+            trail.segments.push({ mesh: trailSegment, timestamp });
+            trail.lastPosition = spawnPos.clone();
+            trail.lastRotation = rotation;
+
+            // Cleanup old segments
+            trail.segments = trail.segments.filter(segment => {
+                if (timestamp - segment.timestamp > trailLifetime) {
+                    scene.remove(segment.mesh);
+                    return false;
+                }
+                return true;
+            });
         }
 
         function checkCollisions() {
